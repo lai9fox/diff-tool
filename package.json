@@ -7,6 +7,7 @@
     "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "deploy": "pnpm build && wrangler pages deploy",
     "check": "vue-tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "vue-tsc": "^3.3.11"
+    "vue-tsc": "^3.3.11",
+    "wrangler": "^4.143.0"
   }
 }
