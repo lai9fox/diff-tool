@@ -2,12 +2,16 @@
 import Workbench from '../components/Workbench.vue';
 import '../styles/global.css';
 ---
+
 <!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="在浏览器本地比较代码、配置与文字。Compare text, locally." />
+    <meta
+      name="description"
+      content="在浏览器本地比较代码、配置与文字。Compare text, locally."
+    />
     <meta name="theme-color" content="#F5F7FA" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={Astro.site} />
@@ -15,12 +19,20 @@ import '../styles/global.css';
     <script is:inline>
       try {
         const p = JSON.parse(localStorage.getItem('diff.preferences') || '{}');
-        document.documentElement.dataset.theme = p.theme === 'dark' || (p.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.dataset.theme =
+          p.theme === 'dark' ||
+          (p.theme !== 'light' &&
+            matchMedia('(prefers-color-scheme: dark)').matches)
+            ? 'dark'
+            : 'light';
       } catch {}
     </script>
   </head>
   <body>
     <Workbench client:only="vue" />
-    <noscript>Diff 需要启用 JavaScript 才能在本机比较文本。JavaScript is required to compare text locally.</noscript>
+    <noscript>
+      Diff 需要启用 JavaScript 才能在本机比较文本。JavaScript is required to
+      compare text locally.
+    </noscript>
   </body>
 </html>

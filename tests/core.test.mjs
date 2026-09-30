@@ -48,9 +48,11 @@ test('mapped changes remain in original text coordinates', () => {
   const left = '  配置为浅色  \n  wrap: false', right = '配置为深色\nwrap: true  ';
   const differences = chunks(left, right, true);
   assert.ok(differences.length);
-  for (const chunk of differences) for (const change of chunk.changes) {
-    assert.ok(chunk.fromA + change.fromA >= 0);
-    assert.ok(chunk.fromA + change.toA <= left.length);
-    assert.ok(chunk.fromB + change.toB <= right.length);
+  for (const chunk of differences) {
+    for (const change of chunk.changes) {
+      assert.ok(chunk.fromA + change.fromA >= 0);
+      assert.ok(chunk.fromA + change.toA <= left.length);
+      assert.ok(chunk.fromB + change.toB <= right.length);
+    }
   }
 });

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+pnpm-lock.yaml
+# JS, TS and Vue formatting is managed by ESLint.
+**/*.js
+**/*.mjs
+**/*.cjs
+**/*.ts
+**/*.vue

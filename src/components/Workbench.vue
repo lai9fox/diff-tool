@@ -5,14 +5,14 @@ import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutt
 import { defaultKeymap, history, historyField, historyKeymap, indentWithTab, isolateHistory } from '@codemirror/commands';
 import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import {
-  ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Columns2, Copy, FileInput,
+  ArrowDown, ArrowUp, Check, ChevronDown, Columns2, Copy, FileInput,
   FileText, Languages, LockKeyhole, Minus, Monitor, Moon, Plus, Rows2, Sun,
-  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2
+  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2,
 } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
 import {
-  accessibleCollapse, activeChunkField, buildActiveChunkDecoration, detectLanguage,
-  diffConfig, editorTheme, languageExtension, setActiveChunkEffect
+  accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
+  diffConfig, editorTheme, setActiveChunkEffect,
 } from '../lib/editor';
 import '@fontsource/jetbrains-mono/400.css';
 
@@ -30,14 +30,13 @@ const ignoreWhitespace = ref(false);
 
 const texts = ref({ a: '', b: '' });
 const filenames = ref({ a: '', b: '' });
-const languages = ref({ a: 'text', b: 'text' });
 const cleared = ref<{ texts: Record<Side, string>; filenames: Record<Side, string> } | null>(null);
 
 const count = ref(0);
 const current = ref(0);
 const busy = ref(false);
 const copied = ref<Side | null>(null);
-const notice = ref<{ key: MessageKey; type: 'error' | 'success' } | null>(null);
+const notice = ref<MessageKey | null>(null);
 const dragSide = ref<Side | null>(null);
 
 const splitHost = ref<HTMLElement>();
@@ -49,28 +48,26 @@ let merge: MergeView | undefined;
 let unified: EditorView | undefined;
 let refreshTimer: ReturnType<typeof setTimeout>;
 let copiedTimer: ReturnType<typeof setTimeout>;
-let noticeTimer: ReturnType<typeof setTimeout>;
 let media: MediaQueryList;
 let resizeObserver: ResizeObserver | undefined;
 
 const slots = { a: new Compartment(), b: new Compartment() };
-const syntax = { a: new Compartment(), b: new Compartment() };
 
 const t = (key: MessageKey) => messages[locale.value][key];
 const isEmpty = computed(() => !texts.value.a && !texts.value.b);
 const status = computed(() => {
   if (isEmpty.value) return t(cleared.value ? 'cleared' : 'waiting');
   if (busy.value) return t('comparing');
-  if (count.value) return `${count.value} ${t('differences')}`;
+  if (count.value) return `${ count.value } ${ t('differences') }`;
   return ignoreWhitespace.value ? t('filteredMatch') : t('match');
 });
 
 const sideLabel = (side: Side) => t(side === 'a' ? 'original' : 'modified');
 const textLines = (side: Side) => (texts.value[side] ? texts.value[side].split('\n').length : 0);
 const lineCountLabel = (side: Side) =>
-  `${textLines(side).toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en')} ${t(
-    locale.value === 'en' && textLines(side) === 1 ? 'line' : 'lines'
-  )}`;
+  `${ textLines(side).toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en') } ${ t(
+    locale.value === 'en' && textLines(side) === 1 ? 'line' : 'lines',
+  ) }`;
 
 function preferences() {
   try {
@@ -82,7 +79,7 @@ function preferences() {
         layout: layout.value,
         wrap: wrap.value,
         collapse: collapse.value,
-      })
+      }),
     );
   } catch {
     /* Preferences storage is purely optional. */
@@ -143,25 +140,17 @@ function makeExtensions(side: Side, oldState?: EditorState): Extension[] {
     ...(oldState ? [historyField.init(() => oldState.field(historyField))] : []),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
     slots[side].of(visualExtensions(side)),
-    syntax[side].of(languageExtension(languages.value[side])),
     activeChunkField,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         cleared.value = null;
         texts.value[side] = update.state.doc.toString();
-        queueMicrotask(() => {
-          const name = detectLanguage(texts.value[side], filenames.value[side]);
-          if (name !== languages.value[side]) {
-            languages.value[side] = name;
-            merge?.[side].dispatch({ effects: syntax[side].reconfigure(languageExtension(name)) });
-          }
-          queueRefresh();
-        });
+        queueMicrotask(queueRefresh);
       }
       if (update.selectionSet && merge?.chunks.length) {
         const head = update.state.selection.main.head;
         const chunkIndex = merge.chunks.findIndex((c) =>
-          side === 'a' ? head >= c.fromA && head <= c.endA : head >= c.fromB && head <= c.endB
+          (side === 'a' ? head >= c.fromA && head <= c.endA : head >= c.fromB && head <= c.endB),
         );
         if (chunkIndex !== -1 && current.value !== chunkIndex + 1) {
           current.value = chunkIndex + 1;
@@ -202,15 +191,14 @@ function buildUnified() {
       lineNumbers(),
       drawSelection(),
       ...visualExtensions('b'),
-      languageExtension(languages.value.b),
       activeChunkField,
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
       Prec.high(
         EditorView.contentAttributes.of({
-          'aria-label': `${t('unified')} — ${t('readonly')}`,
+          'aria-label': `${ t('unified') } — ${ t('readonly') }`,
           'aria-readonly': 'true',
-        })
+        }),
       ),
       unifiedMergeView({
         original: texts.value.a,
@@ -237,7 +225,6 @@ function replaceText(side: Side, text: string) {
 function clearAll() {
   if (isEmpty.value || !merge) return;
   const snapshot = { texts: { ...texts.value }, filenames: { ...filenames.value } };
-  clearTimeout(noticeTimer);
   clearTimeout(copiedTimer);
   notice.value = null;
   copied.value = null;
@@ -279,12 +266,6 @@ function jump(direction: number) {
   }
 }
 
-function showNotice(key: MessageKey, type: 'error' | 'success') {
-  clearTimeout(noticeTimer);
-  notice.value = { key, type };
-  if (type === 'success') noticeTimer = setTimeout(() => (notice.value = null), 4000);
-}
-
 async function copy(side: Side) {
   try {
     await navigator.clipboard.writeText(texts.value[side]);
@@ -292,7 +273,7 @@ async function copy(side: Side) {
     clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => (copied.value = null), 1800);
   } catch {
-    showNotice('copyError', 'error');
+    notice.value = 'copyError';
   }
 }
 
@@ -307,11 +288,9 @@ async function readFile(side: Side, file?: File) {
     if (contents.includes('\0')) throw new Error('Binary file');
     cleared.value = null;
     filenames.value[side] = file.name;
-    languages.value[side] = detectLanguage(contents, file.name);
-    merge?.[side].dispatch({ effects: syntax[side].reconfigure(languageExtension(languages.value[side])) });
     replaceText(side, contents);
   } catch {
-    showNotice(side === 'a' ? 'fileErrorA' : 'fileErrorB', 'error');
+    notice.value = side === 'a' ? 'fileErrorA' : 'fileErrorB';
   }
 }
 
@@ -365,7 +344,7 @@ watch([locale, theme, wrap, collapse, layout], preferences);
 watch([dark, locale, wrap], () => {
   document.documentElement.dataset.theme = dark.value ? 'dark' : 'light';
   document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en';
-  document.title = `Diff — ${t('app')}`;
+  document.title = `Diff — ${ t('app') }`;
   for (const side of ['a', 'b'] as Side[]) {
     merge?.[side].dispatch({ effects: slots[side].reconfigure(visualExtensions(side)) });
   }
@@ -439,7 +418,6 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearTimeout(refreshTimer);
   clearTimeout(copiedTimer);
-  clearTimeout(noticeTimer);
 });
 </script>
 
@@ -475,7 +453,7 @@ onBeforeUnmount(() => {
             }}<span class="nav-word">{{ t('differences') }}</span>
           </template>
           <template v-else>
-            <span class="status-dot" :class="{ success: !isEmpty && !busy }"></span>{{ status }}
+            <span class="status-dot" :class="{ success: !isEmpty && !busy }" />{{ status }}
           </template>
         </span>
         <div class="nav-buttons">
@@ -509,7 +487,7 @@ onBeforeUnmount(() => {
           </select>
           <ChevronDown :size="12" />
         </label>
-        <label class="select-control theme-select">
+        <label class="select-control">
           <component :is="theme === 'system' ? Monitor : theme === 'dark' ? Moon : Sun" :size="15" />
           <select v-model="theme" :aria-label="t('theme')">
             <option value="system">{{ t('system') }}</option>
@@ -525,18 +503,18 @@ onBeforeUnmount(() => {
       <div class="toolbar">
         <div class="options">
           <label class="option">
-            <input type="checkbox" v-model="wrap" />
+            <input v-model="wrap" type="checkbox">
             <WrapText :size="15" />
             <span>{{ t('wrap') }}</span>
           </label>
           <label class="option">
-            <input type="checkbox" v-model="collapse" />
+            <input v-model="collapse" type="checkbox">
             <ChevronsDownUp :size="15" />
             <span>{{ t('collapse') }}</span>
           </label>
-          <span class="toolbar-divider"></span>
+          <span class="toolbar-divider" />
           <label class="option" :class="{ 'rule-active': ignoreWhitespace }">
-            <input type="checkbox" v-model="ignoreWhitespace" />
+            <input v-model="ignoreWhitespace" type="checkbox">
             <span>{{ t('whitespace') }}</span>
           </label>
         </div>
@@ -557,11 +535,10 @@ onBeforeUnmount(() => {
       <div
         v-if="notice"
         class="notice"
-        :class="notice.type"
-        :role="notice.type === 'error' ? 'alert' : 'status'"
+        role="alert"
       >
-        <component :is="notice.type === 'error' ? AlertCircle : CheckCheck" :size="16" />
-        <span>{{ t(notice.key) }}</span>
+        <AlertCircle :size="16" />
+        <span>{{ t(notice) }}</span>
         <button class="icon-button" :aria-label="t('close')" @click="notice = null">
           <X :size="15" />
         </button>
@@ -578,7 +555,6 @@ onBeforeUnmount(() => {
               <h2>{{ sideLabel(side) }}</h2>
             </div>
             <div v-if="texts[side]" class="pane-stats">
-              <span>{{ languages[side] === 'text' ? t('plain') : languages[side] }}</span>
               <span>{{ lineCountLabel(side) }}</span>
             </div>
             <span v-if="filenames[side]" class="file-name" :title="filenames[side]">{{
@@ -602,7 +578,9 @@ onBeforeUnmount(() => {
       <div v-if="layout === 'unified'" class="readonly-bar">
         <LockKeyhole :size="12" />
         <span>{{ t('readonly') }}</span>
-        <button @click="switchToSplitAndFocus">{{ t('edit') }}</button>
+        <button @click="switchToSplitAndFocus">
+          {{ t('edit') }}
+        </button>
       </div>
 
       <div
@@ -616,8 +594,8 @@ onBeforeUnmount(() => {
         "
         @drop.capture="dropped"
       >
-        <div v-show="layout === 'split'" ref="splitHost" class="split-host"></div>
-        <div v-show="layout === 'unified'" ref="unifiedHost" class="unified-host"></div>
+        <div v-show="layout === 'split'" ref="splitHost" class="split-host" />
+        <div v-show="layout === 'unified'" ref="unifiedHost" class="unified-host" />
 
         <div v-if="layout === 'split'" class="empty-overlays">
           <div
@@ -643,7 +621,9 @@ onBeforeUnmount(() => {
         <div v-if="layout === 'unified' && isEmpty" class="unified-empty">
           <FileText :size="26" />
           <p>{{ t('waiting') }}</p>
-          <button class="format-button" @click="switchToSplitAndFocus">{{ t('edit') }}</button>
+          <button class="format-button" @click="switchToSplitAndFocus">
+            {{ t('edit') }}
+          </button>
         </div>
 
         <div v-if="dragSide" class="drop-overlay" :class="dragSide">
@@ -659,14 +639,14 @@ onBeforeUnmount(() => {
       type="file"
       tabindex="-1"
       @change="picked('a', $event)"
-    />
+    >
     <input
       ref="fileB"
       class="file-input"
       type="file"
       tabindex="-1"
       @change="picked('b', $event)"
-    />
+    >
     <span class="sr-only" aria-live="polite">{{ copied ? t('copied') : '' }}</span>
   </main>
 </template>

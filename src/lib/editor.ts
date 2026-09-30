@@ -1,16 +1,6 @@
 import { Change, Chunk, diff, type DiffConfig } from '@codemirror/merge';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Decoration, type DecorationSet, EditorView, ViewPlugin } from '@codemirror/view';
 import { StateEffect, StateField } from '@codemirror/state';
-import { tags } from '@lezer/highlight';
-import { json } from '@codemirror/lang-json';
-import { javascript } from '@codemirror/lang-javascript';
-import { yaml } from '@codemirror/lang-yaml';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
-import { python } from '@codemirror/lang-python';
-import { sql } from '@codemirror/lang-sql';
-import { markdown } from '@codemirror/lang-markdown';
 
 // Prevent @codemirror/merge from treating continuous CJK ideographs as single long words
 // which would incorrectly expand 2-character changes to entire 50-character sentences.
@@ -21,7 +11,7 @@ const isCjk = (str: unknown): boolean => {
     (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
     (code >= 0x3400 && code <= 0x4dbf) || // CJK Extension A
     (code >= 0x3040 && code <= 0x30ff) || // Hiragana & Katakana
-    (code >= 0xac00 && code <= 0xd7af)    // Hangul Syllables
+    (code >= 0xac00 && code <= 0xd7af) // Hangul Syllables
   );
 };
 
@@ -33,36 +23,9 @@ RegExp.prototype.test = function (str: string) {
   return origRegExpTest.call(this, str);
 };
 
-export function detectLanguage(text: string, filename = '') {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  if (ext === 'json' || /^[\s]*[\[{]/.test(text)) return 'JSON';
-  if (['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'].includes(ext || '') || /(^|\n)\s*(import |export |const |let |function )/.test(text)) return 'JavaScript';
-  if (['yml', 'yaml'].includes(ext || '') || /(^|\n)\s*[\w.-]+:\s+[^\n]+/.test(text)) return 'YAML';
-  if (['html', 'vue', 'xml', 'svg'].includes(ext || '') || /^\s*</.test(text)) return 'HTML';
-  if (ext === 'css') return 'CSS';
-  if (ext === 'py' || /(^|\n)(def |from \w+ import )/.test(text)) return 'Python';
-  if (ext === 'sql' || /^\s*(SELECT|CREATE TABLE|INSERT INTO)\b/i.test(text)) return 'SQL';
-  if (ext === 'md' || /^#{1,6} /.test(text)) return 'Markdown';
-  return 'text';
-}
-
-export function languageExtension(name: string) {
-  switch (name) {
-    case 'JSON': return json();
-    case 'JavaScript': return javascript({ typescript: true, jsx: true });
-    case 'YAML': return yaml();
-    case 'HTML': return html();
-    case 'CSS': return css();
-    case 'Python': return python();
-    case 'SQL': return sql();
-    case 'Markdown': return markdown();
-    default: return [];
-  }
-}
-
 // Map text to handle CRLF/LF equivalency and optional outer whitespace trimming.
 // All resulting diff coordinates are mapped back to original text coordinates.
-export function mapText(input: string, ignoreWhitespace: boolean) {
+function mapText(input: string, ignoreWhitespace: boolean) {
   let text = '';
   const positions: number[] = [];
   const lines = input.split(/\r?\n/);
@@ -125,11 +88,13 @@ export function diffConfig(ignoreWhitespace: boolean): DiffConfig {
   };
 }
 
-export const activeDiffLine = Decoration.line({ class: 'cm-active-diff-chunk' });
+const activeDiffLine = Decoration.line({ class: 'cm-active-diff-chunk' });
 export const setActiveChunkEffect = StateEffect.define<DecorationSet>();
 
 export const activeChunkField = StateField.define<DecorationSet>({
-  create() { return Decoration.none; },
+  create() {
+    return Decoration.none;
+  },
   update(deco, tr) {
     for (const effect of tr.effects) {
       if (effect.is(setActiveChunkEffect)) {
@@ -175,10 +140,8 @@ export function editorTheme(dark: boolean) {
       '&.cm-merge-a .cm-changedLine, .cm-deletedChunk, .cm-deletedLine': { backgroundColor: 'var(--remove-bg)' },
       '&.cm-merge-b .cm-changedLine, .cm-insertedLine': { backgroundColor: 'var(--add-bg)' },
       '.cm-changedLine': { backgroundColor: 'var(--add-bg)' },
-      '&.cm-merge-a .cm-changedLine': { backgroundColor: 'var(--remove-bg)' },
       '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText': { backgroundColor: 'var(--remove-mark)', backgroundImage: 'none' },
       '&.cm-merge-b .cm-changedText, .cm-changedText': { backgroundColor: 'var(--add-mark)', backgroundImage: 'none' },
-      '&.cm-merge-a .cm-changedText': { backgroundColor: 'var(--remove-mark)' },
 
       '.cm-deletedChunk': { padding: '0 16px 0 12px', fontFamily: 'var(--font-code)' },
       '.cm-deletedLine': { lineHeight: '22px' },
@@ -193,14 +156,6 @@ export function editorTheme(dark: boolean) {
       // Active diff chunk indicator
       '.cm-active-diff-chunk': { boxShadow: 'inset 3.5px 0 0 var(--accent)' },
     }, { dark }),
-    syntaxHighlighting(HighlightStyle.define([
-      { tag: [tags.keyword, tags.modifier], color: dark ? '#B9A3F1' : '#7853A4' },
-      { tag: [tags.string, tags.special(tags.string)], color: dark ? '#A8D2B4' : '#4C7353' },
-      { tag: [tags.number, tags.bool, tags.null], color: dark ? '#E6BD8A' : '#A36529' },
-      { tag: [tags.propertyName, tags.attributeName], color: dark ? '#A0BFEB' : '#375E8F' },
-      { tag: tags.comment, color: dark ? '#9AA6B6' : '#788494' },
-      { tag: [tags.tagName, tags.function(tags.variableName)], color: dark ? '#8ACFCC' : '#357675' },
-    ])),
   ];
 }
 
@@ -223,5 +178,7 @@ export const accessibleCollapse = ViewPlugin.fromClass(class {
     this.observer.observe(view.dom, { childList: true, subtree: true });
     queueMicrotask(enhance);
   }
-  destroy() { this.observer.disconnect(); }
+  destroy() {
+    this.observer.disconnect();
+  }
 });
