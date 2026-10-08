@@ -425,7 +425,19 @@ onBeforeUnmount(() => {
   <main class="app-shell">
     <header class="topbar">
       <div class="brand" aria-label="Diff">
-        <span class="brand-symbol" aria-hidden="true"><Minus :size="15" /><Plus :size="15" /></span>
+        <svg
+          class="brand-symbol"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path class="icon-add" d="M12 3v14M5 10h14" />
+          <path class="icon-remove" d="M5 21h14" />
+        </svg>
         <h1>Diff<span class="brand-period">.</span></h1>
       </div>
 
@@ -526,7 +538,7 @@ onBeforeUnmount(() => {
             @click="cleared ? undoClear() : clearAll()"
           >
             <Undo2 v-if="cleared" :size="15" />
-            <Trash2 v-else :size="15" />
+            <Trash2 v-else class="icon-remove" :size="15" />
             {{ t(cleared ? 'undoClear' : 'clearAll') }}
           </button>
         </div>
@@ -567,7 +579,7 @@ onBeforeUnmount(() => {
               <span>{{ t('open') }}</span>
             </button>
             <button :disabled="!texts[side]" @click="copy(side)">
-              <Check v-if="copied === side" :size="14" />
+              <Check v-if="copied === side" class="icon-add" :size="14" />
               <Copy v-else :size="14" />
               <span>{{ copied === side ? t('copied') : t('copy') }}</span>
             </button>

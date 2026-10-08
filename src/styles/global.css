@@ -149,12 +149,16 @@ svg {
 }
 
 .brand-symbol {
-  display: inline-flex;
-  gap: 1px;
-  align-items: center;
-  color: var(--accent);
-  width: 36px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
+}
+
+.icon-add {
+  color: var(--add);
+}
+
+.icon-remove {
+  color: var(--remove);
 }
 
 .layout-switch {
