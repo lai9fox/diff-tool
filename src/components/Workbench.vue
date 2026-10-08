@@ -165,7 +165,7 @@ function buildSplit() {
   if (!splitHost.value) return;
   const oldA = merge?.a.state;
   const oldB = merge?.b.state;
-  const scroll = merge?.dom.scrollTop || 0;
+  const scroll = merge?.a.scrollDOM.scrollTop || 0;
   merge?.destroy();
   merge = new MergeView({
     a: { doc: texts.value.a, selection: oldA?.selection, extensions: makeExtensions('a', oldA) },
@@ -176,7 +176,15 @@ function buildSplit() {
     diffConfig: diffConfig(ignoreWhitespace.value),
     collapseUnchanged: collapse.value ? { margin: 3, minSize: 4 } : undefined,
   });
-  merge.dom.scrollTop = scroll;
+  const { a, b } = merge;
+  const syncScroll = (source: EditorView, target: EditorView) => {
+    if (target.scrollDOM.scrollTop !== source.scrollDOM.scrollTop) {
+      target.scrollDOM.scrollTop = source.scrollDOM.scrollTop;
+    }
+  };
+  a.scrollDOM.addEventListener('scroll', () => syncScroll(a, b));
+  b.scrollDOM.addEventListener('scroll', () => syncScroll(b, a));
+  a.scrollDOM.scrollTop = b.scrollDOM.scrollTop = scroll;
   queueRefresh();
 }
 
@@ -232,7 +240,7 @@ function clearAll() {
   replaceText('a', '');
   replaceText('b', '');
   count.value = current.value = 0;
-  merge.dom.scrollTop = 0;
+  merge.a.scrollDOM.scrollTop = merge.b.scrollDOM.scrollTop = 0;
   if (unified) unified.scrollDOM.scrollTop = 0;
   // Snapshot saved after editor transactions invalidate previous snapshots
   cleared.value = snapshot;
@@ -614,6 +622,7 @@ onBeforeUnmount(() => {
             v-for="side in (['a', 'b'] as const)"
             :key="side"
             class="empty-cell"
+            :class="{ 'is-empty': !texts[side] }"
             @click="focusSide(side)"
           >
             <div v-if="!texts[side]" class="empty-state">
