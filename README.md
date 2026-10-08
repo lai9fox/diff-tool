@@ -4,12 +4,17 @@
 
 ## 运行
 
-需要 Node.js 22.13 或以上版本及 pnpm。
+需要 Node.js 22.13 或以上版本及 pnpm 10 或 11。
 
 ```sh
 pnpm install
 pnpm dev
 ```
+
+项目已配置 `esbuild`、`workerd` 的安装脚本许可，同时兼容 pnpm 10 的
+`onlyBuiltDependencies` 和 pnpm 10.26+ / 11 的 `allowBuilds`。两处许可名单需保持一致。
+启动命令不自动安装依赖；首次运行、依赖变更或切换 pnpm 主版本后，请先执行
+`pnpm install --frozen-lockfile`，再执行 `pnpm dev`。不同电脑之间不要复制 `node_modules`。
 
 在浏览器打开终端输出的本地地址。默认端口为 4321，被占用时可能自动选择其他端口。
 

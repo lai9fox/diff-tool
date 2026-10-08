@@ -1,0 +1,12 @@
+# pnpm 10 before 10.26 uses this list; pnpm 11 ignores it.
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+
+# pnpm 10.26+ and pnpm 11 use this map. Keep it in sync with the list above.
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+# Install explicitly with pnpm install, consistently across pnpm 10 and 11.
+verifyDepsBeforeRun: false
