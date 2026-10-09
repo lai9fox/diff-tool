@@ -5,11 +5,12 @@ import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutt
 import { defaultKeymap, history, historyField, historyKeymap, indentWithTab, isolateHistory } from '@codemirror/commands';
 import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import {
-  ArrowDown, ArrowUp, Check, ChevronDown, Columns2, Copy, FileInput,
-  FileText, Languages, LockKeyhole, Minus, Monitor, Moon, Plus, Rows2, Sun,
-  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2,
+  ArrowDown, ArrowUp, Check, Columns2, Copy, FileInput,
+  FileText, GitCompareArrows, LockKeyhole, Minus, Moon, Plus, Rows2, Sun,
+  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2, Space,
 } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
+import { useResponsiveChrome } from '../lib/responsive-chrome';
 import {
   accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
   diffConfig, editorTheme, setActiveChunkEffect,
@@ -17,12 +18,12 @@ import {
 import '@fontsource/jetbrains-mono/400.css';
 
 type Side = 'a' | 'b';
-type Theme = 'system' | 'light' | 'dark';
+type Theme = 'light' | 'dark';
 
 const locale = ref<Locale>('zh');
-const theme = ref<Theme>('system');
-const systemDark = ref(false);
-const dark = computed(() => theme.value === 'dark' || (theme.value === 'system' && systemDark.value));
+const theme = ref<Theme>('light');
+const dark = computed(() => theme.value === 'dark');
+
 const layout = ref<'split' | 'unified'>('split');
 const wrap = ref(true);
 const collapse = ref(true);
@@ -40,6 +41,8 @@ const notice = ref<MessageKey | null>(null);
 const dragSide = ref<Side | null>(null);
 
 const splitHost = ref<HTMLElement>();
+const workspace = ref<HTMLElement>();
+useResponsiveChrome(workspace);
 const unifiedHost = ref<HTMLElement>();
 const fileA = ref<HTMLInputElement>();
 const fileB = ref<HTMLInputElement>();
@@ -48,7 +51,6 @@ let merge: MergeView | undefined;
 let unified: EditorView | undefined;
 let refreshTimer: ReturnType<typeof setTimeout>;
 let copiedTimer: ReturnType<typeof setTimeout>;
-let media: MediaQueryList;
 let resizeObserver: ResizeObserver | undefined;
 
 const slots = { a: new Compartment(), b: new Compartment() };
@@ -230,7 +232,8 @@ function replaceText(side: Side, text: string) {
   });
 }
 
-function clearAll() {
+function clearAll(event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.blur();
   if (isEmpty.value || !merge) return;
   const snapshot = { texts: { ...texts.value }, filenames: { ...filenames.value } };
   clearTimeout(copiedTimer);
@@ -246,7 +249,8 @@ function clearAll() {
   cleared.value = snapshot;
 }
 
-function undoClear() {
+function undoClear(event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.blur();
   const snapshot = cleared.value;
   if (!snapshot) return;
   cleared.value = null;
@@ -255,7 +259,8 @@ function undoClear() {
   replaceText('b', snapshot.texts.b);
 }
 
-function jump(direction: number) {
+function jump(direction: number, event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.blur();
   if (!merge || !count.value) return;
   current.value = ((current.value - 1 + direction + count.value) % count.value) + 1;
   const chunk = merge.chunks[current.value - 1];
@@ -274,7 +279,8 @@ function jump(direction: number) {
   }
 }
 
-async function copy(side: Side) {
+async function copy(side: Side, event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.blur();
   try {
     await navigator.clipboard.writeText(texts.value[side]);
     copied.value = side;
@@ -285,7 +291,8 @@ async function copy(side: Side) {
   }
 }
 
-function openFile(side: Side) {
+function openFile(side: Side, event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.blur();
   (side === 'a' ? fileA.value : fileB.value)?.click();
 }
 
@@ -348,9 +355,24 @@ function preventWindowDrop(e: DragEvent) {
   }
 }
 
+function applyTheme(isDark: boolean) {
+  const nextTheme = isDark ? 'dark' : 'light';
+  if (document.documentElement.dataset.theme === nextTheme) return;
+  const style = document.createElement('style');
+  style.textContent = '*:not(.preference-thumb), *::before, *::after { transition: none !important; }';
+  document.head.appendChild(style);
+  document.documentElement.dataset.theme = nextTheme;
+  void document.documentElement.offsetHeight;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      style.remove();
+    });
+  });
+}
+
 watch([locale, theme, wrap, collapse, layout], preferences);
 watch([dark, locale, wrap], () => {
-  document.documentElement.dataset.theme = dark.value ? 'dark' : 'light';
+  applyTheme(dark.value);
   document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en';
   document.title = `Diff — ${ t('app') }`;
   for (const side of ['a', 'b'] as Side[]) {
@@ -382,14 +404,7 @@ watch(layout, async (value) => {
   }
 });
 
-function systemChanged(event: MediaQueryListEvent) {
-  systemDark.value = event.matches;
-}
-
 onMounted(async () => {
-  media = matchMedia('(prefers-color-scheme: dark)');
-  systemDark.value = media.matches;
-  media.addEventListener('change', systemChanged);
   window.addEventListener('keydown', handleGlobalKeydown);
   window.addEventListener('dragover', preventWindowDrop);
   window.addEventListener('drop', preventWindowDrop);
@@ -397,14 +412,14 @@ onMounted(async () => {
   try {
     const p = JSON.parse(localStorage.getItem('diff.preferences') || '{}');
     if (p.locale === 'zh' || p.locale === 'en') locale.value = p.locale;
-    if (['system', 'light', 'dark'].includes(p.theme)) theme.value = p.theme;
+    if (p.theme === 'light' || p.theme === 'dark') theme.value = p.theme;
     if (p.layout === 'split' || p.layout === 'unified') layout.value = p.layout;
     if (typeof p.wrap === 'boolean') wrap.value = p.wrap;
     if (typeof p.collapse === 'boolean') collapse.value = p.collapse;
   } catch {}
 
   await nextTick();
-  document.documentElement.dataset.theme = dark.value ? 'dark' : 'light';
+  applyTheme(dark.value);
   buildSplit();
   if (layout.value === 'unified') buildUnified();
 
@@ -419,7 +434,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   merge?.destroy();
   unified?.destroy();
-  media?.removeEventListener('change', systemChanged);
   window.removeEventListener('keydown', handleGlobalKeydown);
   window.removeEventListener('dragover', preventWindowDrop);
   window.removeEventListener('drop', preventWindowDrop);
@@ -433,122 +447,137 @@ onBeforeUnmount(() => {
   <main class="app-shell">
     <header class="topbar">
       <div class="brand" aria-label="Diff">
-        <svg
+        <GitCompareArrows
           class="brand-symbol"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+          :size="26"
           aria-hidden="true"
-        >
-          <path class="icon-add" d="M12 3v14M5 10h14" />
-          <path class="icon-remove" d="M5 21h14" />
-        </svg>
+        />
         <h1>Diff<span class="brand-period">.</span></h1>
       </div>
 
-      <div class="layout-switch" role="group" :aria-label="t('layout')">
-        <button
-          :class="{ selected: layout === 'split' }"
-          :aria-pressed="layout === 'split'"
-          @click="layout = 'split'"
-        >
-          <Columns2 :size="15" />{{ t('split') }}
-        </button>
-        <button
-          :class="{ selected: layout === 'unified' }"
-          :aria-pressed="layout === 'unified'"
-          @click="layout = 'unified'"
-        >
-          <Rows2 :size="15" />{{ t('unified') }}
-        </button>
-      </div>
-
-      <div class="diff-navigation">
-        <span class="nav-label" :class="{ 'has-diff': count && !busy }" aria-live="polite">
-          <template v-if="count && !busy">
-            <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
-            }}<span class="nav-word">{{ t('differences') }}</span>
-          </template>
-          <template v-else>
-            <span class="status-dot" :class="{ success: !isEmpty && !busy }" />{{ status }}
-          </template>
-        </span>
-        <div class="nav-buttons">
-          <button
-            class="icon-button"
-            :disabled="!count || busy"
-            :aria-label="t('previous')"
-            :title="t('previous')"
-            @click="jump(-1)"
-          >
-            <ArrowUp :size="16" />
-          </button>
-          <button
-            class="icon-button"
-            :disabled="!count || busy"
-            :aria-label="t('next')"
-            :title="t('next')"
-            @click="jump(1)"
-          >
-            <ArrowDown :size="16" />
-          </button>
-        </div>
-      </div>
-
       <div class="preferences">
-        <label class="select-control">
-          <Languages :size="15" />
-          <select v-model="locale" :aria-label="t('language')">
-            <option value="zh">简体中文</option>
-            <option value="en">English</option>
-          </select>
-          <ChevronDown :size="12" />
-        </label>
-        <label class="select-control">
-          <component :is="theme === 'system' ? Monitor : theme === 'dark' ? Moon : Sun" :size="15" />
-          <select v-model="theme" :aria-label="t('theme')">
-            <option value="system">{{ t('system') }}</option>
-            <option value="light">{{ t('light') }}</option>
-            <option value="dark">{{ t('dark') }}</option>
-          </select>
-          <ChevronDown :size="12" />
-        </label>
+        <button
+          type="button"
+          class="preference-toggle"
+          role="switch"
+          :aria-checked="locale === 'en'"
+          :aria-label="t('englishMode')"
+          @click="locale = locale === 'zh' ? 'en' : 'zh'"
+        >
+          <span class="preference-state" aria-hidden="true">{{ locale === 'zh' ? '中' : 'EN' }}</span>
+          <span class="preference-track" aria-hidden="true"><span class="preference-thumb" /></span>
+          <span class="preference-tooltip" aria-hidden="true">{{ t(locale === 'zh' ? 'switchToEnglish' : 'switchToChinese') }}</span>
+        </button>
+        <button
+          type="button"
+          class="preference-toggle"
+          role="switch"
+          :aria-checked="dark"
+          :aria-label="t('darkMode')"
+          @click="theme = dark ? 'light' : 'dark'"
+        >
+          <span class="preference-state" aria-hidden="true">
+            <Moon v-if="dark" :size="17" />
+            <Sun v-else :size="17" />
+          </span>
+          <span class="preference-track" aria-hidden="true"><span class="preference-thumb" /></span>
+          <span class="preference-tooltip" aria-hidden="true">{{ t(dark ? 'switchToLight' : 'switchToDark') }}</span>
+        </button>
       </div>
     </header>
 
-    <section class="workspace" :aria-label="t('app')">
+    <section ref="workspace" class="workspace" :aria-label="t('app')">
       <div class="toolbar">
-        <div class="options">
-          <label class="option">
-            <input v-model="wrap" type="checkbox">
-            <WrapText :size="15" />
-            <span>{{ t('wrap') }}</span>
-          </label>
-          <label class="option">
-            <input v-model="collapse" type="checkbox">
-            <ChevronsDownUp :size="15" />
-            <span>{{ t('collapse') }}</span>
-          </label>
-          <span class="toolbar-divider" />
-          <label class="option" :class="{ 'rule-active': ignoreWhitespace }">
-            <input v-model="ignoreWhitespace" type="checkbox">
-            <span>{{ t('whitespace') }}</span>
-          </label>
+        <div class="comparison-controls">
+          <div class="layout-switch" role="group" :aria-label="t('layout')">
+            <button
+              :class="{ selected: layout === 'split' }"
+              :aria-pressed="layout === 'split'"
+              :aria-label="t('split')"
+              :title="t('split')"
+              @click="layout = 'split'"
+            >
+              <Columns2 :size="15" /><span class="control-label"><span>{{ t('split') }}</span></span>
+            </button>
+            <button
+              :class="{ selected: layout === 'unified' }"
+              :aria-pressed="layout === 'unified'"
+              :aria-label="t('unified')"
+              :title="t('unified')"
+              @click="layout = 'unified'"
+            >
+              <Rows2 :size="15" /><span class="control-label"><span>{{ t('unified') }}</span></span>
+            </button>
+          </div>
+
+          <div class="options">
+            <label class="option" :title="t('wrap')">
+              <input v-model="wrap" type="checkbox" :aria-label="t('wrap')">
+              <WrapText :size="15" />
+              <span class="control-label"><span>{{ t('wrap') }}</span></span>
+            </label>
+            <label class="option" :title="t('collapse')">
+              <input v-model="collapse" type="checkbox" :aria-label="t('collapse')">
+              <ChevronsDownUp :size="15" />
+              <span class="control-label"><span>{{ t('collapse') }}</span></span>
+            </label>
+            <label class="option" :class="{ 'rule-active': ignoreWhitespace }" :title="t('whitespace')">
+              <input v-model="ignoreWhitespace" type="checkbox" :aria-label="t('whitespace')">
+              <Space :size="15" />
+              <span class="control-label"><span>{{ t('whitespace') }}</span></span>
+            </label>
+          </div>
+          <div class="toolbar-actions">
+            <span class="toolbar-divider" aria-hidden="true" />
+            <button
+              class="clear-button"
+              :class="{ 'undo-clear': cleared }"
+              :disabled="isEmpty && !cleared"
+              :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
+              :title="t(cleared ? 'undoClear' : 'clearAll')"
+              @click="cleared ? undoClear($event) : clearAll($event)"
+            >
+              <Undo2 v-if="cleared" :size="15" />
+              <Trash2 v-else class="icon-remove" :size="15" />
+              <span class="control-label"><span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span></span>
+            </button>
+          </div>
         </div>
-        <div class="toolbar-actions">
-          <button
-            class="clear-button"
-            :class="{ 'undo-clear': cleared }"
-            :disabled="isEmpty && !cleared"
-            @click="cleared ? undoClear() : clearAll()"
+        <div class="diff-navigation">
+          <span
+            class="nav-label"
+            :class="{ 'has-diff': count && !busy }"
+            aria-live="polite"
+            :title="status"
           >
-            <Undo2 v-if="cleared" :size="15" />
-            <Trash2 v-else class="icon-remove" :size="15" />
-            {{ t(cleared ? 'undoClear' : 'clearAll') }}
-          </button>
+            <template v-if="count && !busy">
+              <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
+              }}<span class="nav-word">{{ t('differences') }}</span>
+            </template>
+            <template v-else>
+              <span class="status-dot" :class="{ success: !isEmpty && !busy }" /><span class="status-text">{{ status }}</span>
+            </template>
+          </span>
+          <div class="nav-buttons">
+            <button
+              class="icon-button"
+              :disabled="!count || busy"
+              :aria-label="t('previous')"
+              :title="t('previous')"
+              @click="jump(-1, $event)"
+            >
+              <ArrowUp :size="16" />
+            </button>
+            <button
+              class="icon-button"
+              :disabled="!count || busy"
+              :aria-label="t('next')"
+              :title="t('next')"
+              @click="jump(1, $event)"
+            >
+              <ArrowDown :size="16" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -564,7 +593,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="pane-headers">
+      <div v-if="layout === 'split'" class="pane-headers">
         <div v-for="side in (['a', 'b'] as const)" :key="side" class="pane-heading">
           <div class="pane-info">
             <div class="pane-name">
@@ -572,7 +601,9 @@ onBeforeUnmount(() => {
                 <Minus v-if="side === 'a'" :size="13" />
                 <Plus v-else :size="13" />
               </span>
-              <h2>{{ sideLabel(side) }}</h2>
+              <h2 :title="sideLabel(side)">
+                {{ sideLabel(side) }}
+              </h2>
             </div>
             <div v-if="texts[side]" class="pane-stats">
               <span>{{ lineCountLabel(side) }}</span>
@@ -582,22 +613,30 @@ onBeforeUnmount(() => {
             }}</span>
           </div>
           <div class="pane-actions">
-            <button @click="openFile(side)">
+            <button :aria-label="t('open')" :title="t('open')" @click="openFile(side, $event)">
               <FileInput :size="14" />
-              <span>{{ t('open') }}</span>
+              <span class="control-label"><span>{{ t('open') }}</span></span>
             </button>
-            <button :disabled="!texts[side]" @click="copy(side)">
+            <button
+              :class="{ copied: copied === side }"
+              :disabled="!texts[side]"
+              :aria-label="copied === side ? t('copied') : t('copy')"
+              :title="copied === side ? t('copied') : t('copy')"
+              @click="copy(side, $event)"
+            >
               <Check v-if="copied === side" class="icon-add" :size="14" />
               <Copy v-else :size="14" />
-              <span>{{ copied === side ? t('copied') : t('copy') }}</span>
+              <span class="control-label"><span>{{ copied === side ? t('copied') : t('copy') }}</span></span>
             </button>
           </div>
         </div>
       </div>
 
       <div v-if="layout === 'unified'" class="readonly-bar">
-        <LockKeyhole :size="12" />
-        <span>{{ t('readonly') }}</span>
+        <div class="readonly-heading">
+          <h2>{{ t('unified') }}</h2>
+          <span class="readonly-status"><LockKeyhole :size="12" />{{ t('readonly') }}</span>
+        </div>
         <button @click="switchToSplitAndFocus">
           {{ t('edit') }}
         </button>

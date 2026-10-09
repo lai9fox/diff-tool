@@ -20,11 +20,7 @@ import '../styles/global.css';
       try {
         const p = JSON.parse(localStorage.getItem('diff.preferences') || '{}');
         document.documentElement.dataset.theme =
-          p.theme === 'dark' ||
-          (p.theme !== 'light' &&
-            matchMedia('(prefers-color-scheme: dark)').matches)
-            ? 'dark'
-            : 'light';
+          p.theme === 'dark' ? 'dark' : 'light';
       } catch {}
     </script>
   </head>
