@@ -7,10 +7,12 @@ import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import {
   ArrowDown, ArrowUp, Check, Columns2, Copy, FileInput,
   FileText, GitCompareArrows, LockKeyhole, Minus, Moon, Plus, Rows2, Sun,
-  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2, Space, Menu,
+  WrapText, X, AlertCircle, AlignLeft, Pencil, ChevronsDownUp, Trash2, Undo2, Space, Menu,
 } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
 import SwitchControl from './SwitchControl.vue';
+import CustomSelect from './CustomSelect.vue';
+import { diffStats, type ComparisonMethod, type DiffStats } from '../lib/diff';
 import { useResponsiveChrome } from '../lib/responsive-chrome';
 import {
   accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
@@ -29,6 +31,8 @@ const layout = ref<'split' | 'unified'>('split');
 const wrap = ref(true);
 const collapse = ref(true);
 const ignoreWhitespace = ref(false);
+const comparisonMethod = ref<ComparisonMethod>('line');
+const stats = ref<DiffStats>({ added: 0, modified: 0, deleted: 0 });
 
 const texts = ref({ a: '', b: '' });
 const filenames = ref({ a: '', b: '' });
@@ -86,6 +90,7 @@ function preferences() {
         layout: layout.value,
         wrap: wrap.value,
         collapse: collapse.value,
+        comparisonMethod: comparisonMethod.value,
       }),
     );
   } catch {
@@ -130,6 +135,7 @@ function queueRefresh() {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     count.value = merge?.chunks.length || 0;
+    stats.value = diffStats(texts.value.a, texts.value.b, ignoreWhitespace.value);
     current.value = count.value ? Math.max(1, Math.min(current.value, count.value)) : 0;
     busy.value = false;
     updateActiveChunkHighlight();
@@ -179,8 +185,8 @@ function buildSplit() {
     b: { doc: texts.value.b, selection: oldB?.selection, extensions: makeExtensions('b', oldB) },
     parent: splitHost.value,
     gutter: true,
-    highlightChanges: true,
-    diffConfig: diffConfig(ignoreWhitespace.value),
+    highlightChanges: comparisonMethod.value !== 'line',
+    diffConfig: diffConfig(ignoreWhitespace.value, comparisonMethod.value),
     collapseUnchanged: collapse.value ? { margin: 3, minSize: 4 } : undefined,
   });
   const { a, b } = merge;
@@ -218,8 +224,9 @@ function buildUnified() {
       unifiedMergeView({
         original: texts.value.a,
         mergeControls: false,
+        highlightChanges: comparisonMethod.value !== 'line',
         gutter: true,
-        diffConfig: diffConfig(ignoreWhitespace.value),
+        diffConfig: diffConfig(ignoreWhitespace.value, comparisonMethod.value),
         collapseUnchanged: collapse.value ? { margin: 3, minSize: 4 } : undefined,
       }),
     ],
@@ -248,6 +255,7 @@ function clearAll(event?: Event) {
   replaceText('a', '');
   replaceText('b', '');
   count.value = current.value = 0;
+  stats.value = { added: 0, modified: 0, deleted: 0 };
   merge.a.scrollDOM.scrollTop = merge.b.scrollDOM.scrollTop = 0;
   if (unified) unified.scrollDOM.scrollTop = 0;
   // Snapshot saved after editor transactions invalidate previous snapshots
@@ -404,7 +412,7 @@ function applyTheme(isDark: boolean) {
   });
 }
 
-watch([locale, theme, wrap, collapse, layout], preferences);
+watch([locale, theme, wrap, collapse, layout, comparisonMethod], preferences);
 watch([dark, locale, wrap], () => {
   applyTheme(dark.value);
   document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en';
@@ -421,7 +429,7 @@ watch(collapse, () => {
   if (layout.value === 'unified') buildUnified();
 });
 
-watch(ignoreWhitespace, () => {
+watch([ignoreWhitespace, comparisonMethod], () => {
   buildSplit();
   if (layout.value === 'unified') buildUnified();
 });
@@ -453,6 +461,7 @@ onMounted(async () => {
     if (p.layout === 'split' || p.layout === 'unified') layout.value = p.layout;
     if (typeof p.wrap === 'boolean') wrap.value = p.wrap;
     if (typeof p.collapse === 'boolean') collapse.value = p.collapse;
+    if (['line', 'word', 'character'].includes(p.comparisonMethod)) comparisonMethod.value = p.comparisonMethod;
   } catch {}
 
   await nextTick();
@@ -528,6 +537,21 @@ onBeforeUnmount(() => {
             <Columns2 v-else :size="16" />
           </SwitchControl>
 
+          <div class="comparison-method control-row">
+            <AlignLeft :size="16" aria-hidden="true" />
+            <label for="comparison-method">{{ t('comparisonMethod') }}</label>
+            <CustomSelect
+              v-model="comparisonMethod"
+              trigger-id="comparison-method"
+              :aria-label="t('comparisonMethod')"
+              :options="[
+                { value: 'line', label: t('byLine') },
+                { value: 'word', label: t('byWord') },
+                { value: 'character', label: t('byCharacter') },
+              ]"
+            />
+          </div>
+
           <div class="options">
             <SwitchControl v-model="wrap" :label="t('wrap')">
               <WrapText :size="16" />
@@ -539,6 +563,20 @@ onBeforeUnmount(() => {
               <Space :size="16" />
             </SwitchControl>
           </div>
+        </div>
+        <div class="toolbar-actions">
+          <button
+            class="clear-button control-row"
+            :class="{ 'undo-clear': cleared }"
+            :disabled="isEmpty && !cleared"
+            :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
+            :title="t(cleared ? 'undoClear' : 'clearAll')"
+            @click="cleared ? undoClear($event) : clearAll($event)"
+          >
+            <Undo2 v-if="cleared" :size="15" />
+            <Trash2 v-else class="icon-remove" :size="15" />
+            <span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span>
+          </button>
         </div>
         <div class="diff-navigation">
           <div class="control-row">
@@ -580,20 +618,29 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-        </div>
-        <div class="toolbar-actions">
-          <button
-            class="clear-button control-row"
-            :class="{ 'undo-clear': cleared }"
-            :disabled="isEmpty && !cleared"
-            :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
-            :title="t(cleared ? 'undoClear' : 'clearAll')"
-            @click="cleared ? undoClear($event) : clearAll($event)"
+          <dl
+            v-if="!isEmpty"
+            class="diff-stats"
+            :aria-label="t('diffStats')"
+            :aria-busy="busy"
           >
-            <Undo2 v-if="cleared" :size="15" />
-            <Trash2 v-else class="icon-remove" :size="15" />
-            <span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span>
-          </button>
+            <div
+              v-for="kind in (['added', 'modified', 'deleted'] as const)"
+              :key="kind"
+              class="control-row"
+              :class="`stat-${ kind }`"
+            >
+              <dt>
+                <span class="stat-icon" aria-hidden="true">
+                  <Plus v-if="kind === 'added'" :size="14" />
+                  <Pencil v-else-if="kind === 'modified'" :size="14" />
+                  <Minus v-else :size="14" />
+                </span>
+                <span>{{ t(kind === 'modified' ? 'changedLines' : kind) }}</span>
+              </dt>
+              <dd>{{ busy ? '…' : stats[kind].toLocaleString(locale === 'zh' ? 'zh-CN' : 'en') }} {{ t(locale === 'en' && stats[kind] === 1 ? 'line' : 'lines') }}</dd>
+            </div>
+          </dl>
         </div>
       </div>
 

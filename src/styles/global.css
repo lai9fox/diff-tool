@@ -18,6 +18,7 @@
   --remove: #b14158;
   --remove-bg: #fdf1f3;
   --remove-mark: #f5ccd5;
+  --clear-hover: #f8e1e7;
   --shadow-popover:
     0 4px 18px rgb(20 40 71 / 10%), 0 2px 6px rgb(20 40 71 / 6%);
   --font-ui:
@@ -52,6 +53,7 @@
   --remove: #f29db0;
   --remove-bg: #402d3b;
   --remove-mark: #653b4b;
+  --clear-hover: #402d3b;
   --shadow-popover: 0 10px 28px rgb(0 0 0 / 50%), 0 2px 8px rgb(0 0 0 / 35%);
 }
 
@@ -268,6 +270,24 @@ svg {
   padding: 0;
 }
 
+.nav-buttons .icon-button {
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.nav-buttons .icon-button:not(:disabled):focus-visible {
+  background: var(--selection);
+  color: var(--accent);
+}
+
+@media (hover: hover) {
+  .nav-buttons .icon-button:not(:disabled):hover {
+    background: var(--selection);
+    color: var(--accent);
+  }
+}
+
 .preferences {
   display: flex;
   flex-direction: column;
@@ -303,6 +323,63 @@ svg {
   gap: 18px;
 }
 
+.comparison-method {
+  min-height: 40px;
+  padding-block: 4px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+
+.comparison-method label {
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.diff-stats {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-stats .control-row {
+  padding-block: 4px;
+}
+
+.diff-stats dt {
+  grid-column: 1 / 3;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diff-stats dd {
+  margin: 0;
+  color: var(--secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stat-added dt {
+  color: var(--add);
+}
+
+.stat-modified dt {
+  color: var(--accent);
+}
+
+.stat-deleted dt {
+  color: var(--remove);
+}
+
 .toolbar-actions {
   display: flex;
 }
@@ -327,8 +404,14 @@ svg {
 }
 
 @media (hover: hover) {
-  .clear-button.undo-clear:hover {
-    background: var(--surface);
+  .clear-button:not(:disabled):hover {
+    background: var(--clear-hover);
+    color: var(--remove);
+  }
+
+  .clear-button.undo-clear:not(:disabled):hover {
+    background: var(--selection);
+    color: var(--accent);
   }
 }
 
@@ -806,7 +889,6 @@ svg {
     min-height: 30px;
     padding: 6px;
   }
-
 }
 
 /* Inert probes always retain expanded text, even when the live region is compact. */

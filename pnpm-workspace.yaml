@@ -10,3 +10,6 @@ allowBuilds:
 
 # Install explicitly with pnpm install, consistently across pnpm 10 and 11.
 verifyDepsBeforeRun: false
+
+patchedDependencies:
+  '@codemirror/merge@6.12.2': patches/@codemirror__merge@6.12.2.patch

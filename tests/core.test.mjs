@@ -56,3 +56,89 @@ test('mapped changes remain in original text coordinates', () => {
     }
   }
 });
+
+// Statistics count complete logical lines, independently of highlight granularity.
+test('line statistics distinguish insertions, deletions, and paired replacements', async () => {
+  const { diffStats } = await import('../src/lib/diff.ts');
+  assert.deepEqual(diffStats('', ''), { added: 0, modified: 0, deleted: 0 });
+  assert.deepEqual(diffStats('', 'first\nsecond'), { added: 2, modified: 0, deleted: 0 });
+  assert.deepEqual(diffStats('first\nsecond', ''), { added: 0, modified: 0, deleted: 2 });
+  assert.deepEqual(diffStats('old one\nold two', 'new one\nnew two\nnew three'), { added: 1, modified: 2, deleted: 0 });
+  assert.deepEqual(diffStats('old one\nold two\nold three', 'new one'), { added: 0, modified: 1, deleted: 2 });
+  assert.deepEqual(diffStats('start\nremove\nkeep\nold\nend', 'start\nkeep\nnew\nextra\nend'), { added: 1, modified: 1, deleted: 1 });
+});
+
+test('line statistics preserve blank lines and respect the existing comparison rules', async () => {
+  const { diffStats } = await import('../src/lib/diff.ts');
+  const zero = { added: 0, modified: 0, deleted: 0 };
+  assert.deepEqual(diffStats('a\r\nb\r\n', 'a\nb\n'), zero);
+  assert.deepEqual(diffStats('  a \n\tb ', 'a\nb', true), zero);
+  assert.deepEqual(diffStats('', ' \t ', true), zero);
+  assert.deepEqual(diffStats('a\n\nb', 'a\nb', true), { added: 0, modified: 0, deleted: 1 });
+  assert.deepEqual(diffStats('a b', 'ab', true), { added: 0, modified: 1, deleted: 0 });
+  assert.deepEqual(diffStats('a', 'a\n'), { added: 1, modified: 0, deleted: 0 });
+});
+
+const chunksWithMethod = (a, b, method) => Chunk.build(Text.of(a.split('\n')), Text.of(b.split('\n')), diffConfig(false, method));
+
+const markedText = (a, b, method) => chunksWithMethod(a, b, method).flatMap(chunk =>
+  chunk.changes.map(c => [
+    a.slice(chunk.fromA + c.fromA, chunk.fromA + c.toA),
+    b.slice(chunk.fromB + c.fromB, chunk.fromB + c.toB),
+  ]),
+);
+
+test('character mode preserves exact changes and word mode highlights complete words', () => {
+  assert.deepEqual(markedText('color = 12', 'colour = 13', 'character'), [['', 'u'], ['2', '3']]);
+  assert.deepEqual(markedText('color = 12', 'colour = 13', 'word'), [['color', 'colour'], ['12', '13']]);
+  assert.deepEqual(markedText('cat', 'cats', 'word'), [['cat', 'cats']]);
+  assert.deepEqual(markedText('hello world', 'hello brave world', 'word'), [['', 'brave ']]);
+  assert.deepEqual(markedText('abcdef', 'abXdeY', 'word'), [['abcdef', 'abXdeY']]);
+});
+
+test('character mode keeps emoji sequences and combining characters intact', () => {
+  assert.deepEqual(markedText('👍🏻', '👍🏽', 'character'), [['👍🏻', '👍🏽']]);
+  assert.deepEqual(markedText('e\u0301', 'e\u0300', 'character'), [['e\u0301', 'e\u0300']]);
+  assert.equal(/\p{Alphabetic}/u.test('中'), true, 'diff code must not modify global RegExp behavior');
+});
+
+test('switching highlight methods preserves changed line ranges', () => {
+  const a = 'start\ncolor = 12\nkeep\nremove\nend';
+  const b = 'start\ncolour = 13\nkeep\nend\nnew';
+  const ranges = method => chunksWithMethod(a, b, method).map(c => [c.fromA, c.toA, c.fromB, c.toB]);
+  assert.deepEqual(ranges('word'), ranges('line'));
+  assert.deepEqual(ranges('character'), ranges('line'));
+});
+
+test('granularity changes keep unchanged gaps aligned and coordinates valid', () => {
+  const samples = ['', 'cat', 'cats', 'cat dog', '你好世界', '你好，世界', '👍🏻 e\u0301', 'a\nb\nc', 'a\n\nb', 'a\n', '\n', 'a\n\nb\n'];
+  for (const a of samples) {
+    for (const b of samples) {
+      for (const method of ['word', 'character']) {
+        const changes = diffConfig(false, method).override(a, b);
+        let posA = 0, posB = 0;
+        for (const c of changes) {
+          assert.ok(c.fromA >= posA && c.toA >= c.fromA && c.toA <= a.length);
+          assert.ok(c.fromB >= posB && c.toB >= c.fromB && c.toB <= b.length);
+          assert.equal(a.slice(posA, c.fromA), b.slice(posB, c.fromB));
+          posA = c.toA;
+          posB = c.toB;
+        }
+        assert.equal(a.slice(posA), b.slice(posB));
+      }
+    }
+  }
+});
+
+test('inline highlights follow line alignment across deletions and later insertions', () => {
+  const a = 'const theme = \'light\';\nconst retries = 3;\nconst legacy = true;\n\nexport const enabled = true;';
+  const b = 'const theme = \'dark\';\nconst retries = 5;\n\nexport const enabled = true;\nexport const timeout = 5000;';
+  const config = diffConfig(false, 'character');
+  const changes = config.override(a, b);
+  const unchangedA = a.indexOf('export const enabled');
+  const unchangedB = b.indexOf('export const enabled');
+  for (const change of changes) {
+    assert.ok(change.toA <= unchangedA || change.fromA >= unchangedA + 'export const enabled = true;'.length);
+    assert.ok(change.toB <= unchangedB || change.fromB >= unchangedB + 'export const enabled = true;'.length);
+  }
+});

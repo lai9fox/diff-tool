@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends string">
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useId, type Component } from 'vue';
 import { Check, ChevronDown } from '@lucide/vue';
 
 export interface SelectOption<V extends string = string> {
@@ -13,13 +13,14 @@ const props = defineProps<{
   options: SelectOption<T>[];
   icon?: Component;
   ariaLabel?: string;
+  triggerId?: string;
 }>();
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: T): void;
 }>();
 
-const listboxId = `select-listbox-${ Math.random().toString(36).slice(2, 8) }`;
+const listboxId = useId();
 
 const isOpen = ref(false);
 const containerRef = ref<HTMLElement | null>(null);
@@ -111,6 +112,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="containerRef" class="custom-select">
     <button
+      :id="triggerId"
       ref="triggerRef"
       type="button"
       class="select-trigger"
@@ -173,3 +175,89 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-select {
+  position: relative;
+  width: 96px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.select-trigger {
+  width: 100%;
+  min-height: 32px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  text-align: left;
+}
+
+.select-trigger.open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.select-label,
+.select-item-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.select-arrow {
+  color: var(--muted);
+  transition: transform 150ms ease-out;
+}
+
+.select-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.select-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 136px;
+  max-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow-popover);
+}
+
+.select-dropdown-item {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.select-item-label {
+  flex: 1;
+}
+
+.select-dropdown-item.selected {
+  color: var(--accent);
+}
+
+.select-dropdown-item.focused {
+  background: var(--accent-soft);
+}
+
+.select-check-icon {
+  color: var(--accent);
+}
+</style>

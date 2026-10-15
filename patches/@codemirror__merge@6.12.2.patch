@@ -1,0 +1,60 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index f3f9998639e0b29d8c6bfce1ff2f7914731b3b85..c3265d1e773aed7120ad26d6a13c1d69295afee8 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -507,7 +507,8 @@ unchanged ranges, and aligning changes to word boundaries when
+ appropriate.
+ */
+ function presentableDiff(a, b, config) {
+-    return makePresentable(diff(a, b, config), a, b);
++    const changes = diff(a, b, config);
++    return config?.preserveChanges ? changes : makePresentable(changes, a, b);
+ }
+ 
+ const mergeConfig = state.Facet.define({
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+index 4567d09879212ad1ba0c23eb9d304996687d7aeb..be3d7cfacc21aa10eef2c2dff1206c2b82c64068 100644
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -48,6 +48,11 @@ declare class Change {
+ Options passed to diffing functions.
+ */
+ interface DiffConfig {
++    /**
++    Preserve the supplied changes without expanding them to word boundaries
++    or merging short unchanged ranges. Used by explicit highlight granularities.
++    */
++    preserveChanges?: boolean;
+     /**
+     When given, this limits the depth of full (expensive) diff
+     computations, causing them to give up and fall back to a faster
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 4567d09879212ad1ba0c23eb9d304996687d7aeb..be3d7cfacc21aa10eef2c2dff1206c2b82c64068 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -48,6 +48,11 @@ declare class Change {
+ Options passed to diffing functions.
+ */
+ interface DiffConfig {
++    /**
++    Preserve the supplied changes without expanding them to word boundaries
++    or merging short unchanged ranges. Used by explicit highlight granularities.
++    */
++    preserveChanges?: boolean;
+     /**
+     When given, this limits the depth of full (expensive) diff
+     computations, causing them to give up and fall back to a faster
+diff --git a/dist/index.js b/dist/index.js
+index 8322cf9b1d463a8e6b4b0ccb4e36069e2de53bda..5863159292c71b538573dc2005e71f2e0f49bd02 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -505,7 +505,8 @@ unchanged ranges, and aligning changes to word boundaries when
+ appropriate.
+ */
+ function presentableDiff(a, b, config) {
+-    return makePresentable(diff(a, b, config), a, b);
++    const changes = diff(a, b, config);
++    return config?.preserveChanges ? changes : makePresentable(changes, a, b);
+ }
+ 
+ const mergeConfig = /*@__PURE__*/Facet.define({

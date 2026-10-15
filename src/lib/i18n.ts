@@ -1,5 +1,7 @@
 export const messages = {
   zh: {
+    comparisonMethod: '对比方式', byLine: '行', byWord: '单词', byCharacter: '字符',
+    diffStats: '差异统计', added: '新增', changedLines: '修改', deleted: '删除',
     controls: '对比工具', closeSidebar: '关闭侧边栏',
     app: '文本差异对比', split: '左右对比', unified: '合并对比', layout: '对比布局',
     original: '原文', modified: '修改后', open: '打开文件', copy: '复制', copied: '已复制',
@@ -20,6 +22,8 @@ export const messages = {
     close: '关闭提示', line: '行', lines: '行', unchanged: '展开 $ 行相同内容',
   },
   en: {
+    comparisonMethod: 'Diff mode', byLine: 'Line', byWord: 'Word', byCharacter: 'Character',
+    diffStats: 'Difference statistics', added: 'Added', changedLines: 'Changed', deleted: 'Deleted',
     controls: 'Comparison tools', closeSidebar: 'Close sidebar',
     app: 'Text comparison', split: 'Side by side', unified: 'Unified', layout: 'Comparison layout',
     original: 'Original', modified: 'Modified', open: 'Open file', copy: 'Copy', copied: 'Copied',
