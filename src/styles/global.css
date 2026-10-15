@@ -83,8 +83,7 @@ button {
 }
 
 button,
-select,
-.option {
+select {
   -webkit-tap-highlight-color: transparent;
   gap: 7px;
   min-height: 34px;
@@ -96,7 +95,7 @@ button:disabled {
 }
 
 @media (hover: hover) {
-  button:not(:disabled, .preference-toggle):hover {
+  button:not(:disabled, .switch-control):hover {
     background: var(--surface);
   }
 }
@@ -123,25 +122,52 @@ svg {
 
 .app-shell {
   height: 100dvh;
-  min-height: 500px;
-  padding: 0 clamp(10px, 2.5vw, 28px) clamp(10px, 1.8vw, 20px);
-  display: flex;
-  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 16px;
 }
 
-.topbar {
-  min-height: 68px;
+.sidebar {
+  position: static;
+  width: 224px;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: var(--bg);
+  overflow: auto;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sidebar[open] {
+  display: flex;
+}
+
+.sidebar button:focus-visible {
+  outline-offset: -2px;
+}
+
+.sidebar-heading {
   display: flex;
   align-items: center;
-  gap: clamp(6px, 2vw, 28px);
+  min-height: 58px;
   flex-shrink: 0;
 }
 
+.mobile-bar,
+.sidebar-close {
+  display: none;
+}
+
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-right: 8px;
+  flex: 1;
 }
 
 .brand h1 {
@@ -168,55 +194,18 @@ svg {
   color: var(--remove);
 }
 
-.layout-switch {
-  display: flex;
-  gap: 3px;
-}
-
-.layout-switch button {
-  min-width: 34px;
-  min-height: 34px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--secondary);
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    padding 180ms ease-out,
-    min-width 180ms ease-out;
-}
-
-.layout-switch button.selected {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-@media (hover: hover) {
-  .layout-switch button:not(.selected):hover {
-    background: var(--surface);
-    color: var(--text);
-  }
-}
-
 .diff-navigation {
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, 1vw, 16px);
-  margin-left: auto;
-  justify-self: end;
   min-width: 0;
-  max-width: 100%;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 
 .nav-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   min-width: 0;
-  white-space: nowrap;
+  line-height: 1.6;
 }
 
 .nav-label.has-diff {
@@ -230,11 +219,30 @@ svg {
 
 .nav-slash {
   color: var(--muted);
-  padding: 0 1px;
+  padding: 0 3px;
 }
 
 .nav-word {
-  margin-left: 1px;
+  margin-left: 4px;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  min-width: 0;
+}
+
+.control-row > svg {
+  justify-self: center;
+}
+
+.navigation-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .status-dot {
@@ -262,86 +270,16 @@ svg {
 
 .preferences {
   display: flex;
-  align-items: center;
-  gap: clamp(2px, 0.7vw, 8px);
-  margin-left: auto;
-}
-
-.preference-toggle {
-  position: relative;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 8px;
-  color: var(--secondary);
-}
-
-.preference-state {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.preference-track {
-  display: inline-flex;
-  align-items: center;
-  width: 30px;
-  height: 18px;
-  padding: 2px;
-  border: 1px solid var(--secondary);
-  border-radius: 9px;
-  background: var(--surface);
-}
-
-.preference-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--secondary);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.preference-toggle[aria-checked='true'] .preference-track {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-.preference-toggle[aria-checked='true'] .preference-thumb {
-  background: var(--panel);
-  transform: translateX(12px);
-}
-
-.preference-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 100;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 400;
-  box-shadow: var(--shadow-popover);
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.preference-toggle:focus-visible .preference-tooltip {
-  visibility: visible;
-}
-
-@media (hover: hover) {
-  .preference-toggle:hover .preference-tooltip {
-    visibility: visible;
-  }
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  margin: auto 0 0;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--border);
 }
 
 .workspace {
-  flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -352,36 +290,28 @@ svg {
   box-shadow: 0 3px 12px #263c5c03;
 }
 
-.toolbar {
-  display: grid;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: clamp(6px, 1.5vw, 28px);
-  padding: 10px clamp(8px, 1.6vw, 18px);
-  border-bottom: 1px solid var(--border);
-  min-height: 60px;
+.sidebar-controls {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
-  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 18px;
 }
 
 .comparison-controls {
   display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: clamp(6px, 1.6vw, 24px);
+  flex-direction: column;
+  gap: 18px;
 }
 
 .toolbar-actions {
   display: flex;
-  align-items: center;
-  gap: clamp(4px, 0.7vw, 10px);
 }
 
 .clear-button {
+  width: 100%;
   min-width: 82px;
-  min-height: 34px;
-  padding: 8px 10px;
+  min-height: 40px;
+  text-align: left;
   color: var(--secondary);
   font-size: 12px;
   transition:
@@ -404,67 +334,10 @@ svg {
 
 .options {
   display: flex;
-  align-items: center;
-  gap: clamp(6px, 1.5vw, 22px);
-  flex-wrap: nowrap;
-}
-
-.option {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  color: var(--secondary);
-  font-size: 12px;
-  white-space: nowrap;
-  user-select: none;
-  min-height: 34px;
-}
-
-.option > svg {
-  color: var(--muted);
-}
-
-.option input {
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--muted);
-  background: var(--panel);
-  border-radius: 3px;
-  margin: 0;
-  position: relative;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.option input:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.option input:checked::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 3px;
-  height: 7px;
-  border-right: 1.5px solid var(--panel);
-  border-bottom: 1.5px solid var(--panel);
-  transform: rotate(42deg);
-}
-
-.option.rule-active {
-  color: var(--accent);
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin-left: -2px;
-  margin-right: -2px;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 
 .format-button {
@@ -579,6 +452,7 @@ svg {
 }
 
 .pane-actions button {
+  gap: 0;
   min-width: 54px;
   font-size: 11px;
   padding: 5px 6px;
@@ -877,16 +751,6 @@ svg {
 
 /* Shrink the chrome continuously; compact labels without moving control groups. */
 
-.layout-switch button,
-.clear-button,
-.pane-actions button {
-  gap: 0;
-}
-
-.option .control-label {
-  margin-left: 0;
-}
-
 .control-label {
   display: grid;
   grid-template-columns: 1fr;
@@ -918,21 +782,6 @@ svg {
   text-overflow: ellipsis;
 }
 
-[data-density='snug'] .comparison-controls,
-[data-density='compact'] .comparison-controls {
-  gap: 12px;
-}
-
-[data-density='snug'] .options,
-[data-density='compact'] .options {
-  gap: 10px;
-}
-
-.toolbar[data-density='snug'],
-.toolbar[data-density='compact'] {
-  column-gap: 12px;
-}
-
 .pane-heading[data-density='snug'],
 .pane-heading[data-density='compact'] {
   gap: 6px;
@@ -952,32 +801,12 @@ svg {
     opacity: 0;
   }
 
-  .option {
-    gap: 7px;
-  }
-
-  .option .control-label {
-    margin-left: -7px;
-  }
-
-  .layout-switch button {
-    padding: 8px;
-  }
-
-  .clear-button {
-    min-width: 34px;
-    padding: 8px;
-  }
-
   .pane-actions button {
     min-width: 30px;
     min-height: 30px;
     padding: 6px;
   }
 
-  .nav-word {
-    display: none;
-  }
 }
 
 /* Inert probes always retain expanded text, even when the live region is compact. */
@@ -997,13 +826,6 @@ svg {
   transition: none !important;
 }
 
-.chrome-measure .diff-navigation {
-  /* Reserve useful status space without letting a long translation dominate. */
-  width: max-content;
-  min-width: 144px;
-  max-width: 240px;
-}
-
 .chrome-measure .pane-info {
   flex-shrink: 0;
 }
@@ -1018,6 +840,43 @@ svg {
 }
 
 @media (width <= 820px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .mobile-bar {
+    display: flex;
+  }
+
+  .sidebar-trigger {
+    min-height: 40px;
+    padding: 0 10px;
+    color: var(--secondary);
+    font-size: 13px;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(280px, calc(100vw - 48px));
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 16px;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar::backdrop {
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .sidebar-close {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
   .file-name {
     display: none;
   }
@@ -1032,17 +891,6 @@ svg {
 
   .empty-state p {
     font-size: 11px;
-  }
-}
-
-@media (width <= 380px) {
-  .toolbar {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 6px;
-  }
-
-  .comparison-controls {
-    justify-content: space-between;
   }
 }
 

@@ -7,9 +7,10 @@ import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import {
   ArrowDown, ArrowUp, Check, Columns2, Copy, FileInput,
   FileText, GitCompareArrows, LockKeyhole, Minus, Moon, Plus, Rows2, Sun,
-  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2, Space,
+  WrapText, X, AlertCircle, ChevronsDownUp, Trash2, Undo2, Space, Menu,
 } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
+import SwitchControl from './SwitchControl.vue';
 import { useResponsiveChrome } from '../lib/responsive-chrome';
 import {
   accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
@@ -39,6 +40,9 @@ const busy = ref(false);
 const copied = ref<Side | null>(null);
 const notice = ref<MessageKey | null>(null);
 const dragSide = ref<Side | null>(null);
+const sidebar = ref<HTMLDialogElement>();
+const sidebarOpen = ref(false);
+const narrowScreen = ref(false);
 
 const splitHost = ref<HTMLElement>();
 const workspace = ref<HTMLElement>();
@@ -52,6 +56,7 @@ let unified: EditorView | undefined;
 let refreshTimer: ReturnType<typeof setTimeout>;
 let copiedTimer: ReturnType<typeof setTimeout>;
 let resizeObserver: ResizeObserver | undefined;
+let sidebarMedia: MediaQueryList | undefined;
 
 const slots = { a: new Compartment(), b: new Compartment() };
 
@@ -262,6 +267,7 @@ function undoClear(event?: Event) {
 function jump(direction: number, event?: Event) {
   (event?.currentTarget as HTMLElement | null)?.blur();
   if (!merge || !count.value) return;
+  closeMobileSidebar();
   current.value = ((current.value - 1 + direction + count.value) % count.value) + 1;
   const chunk = merge.chunks[current.value - 1];
   if (!chunk) return;
@@ -339,6 +345,34 @@ function switchToSplitAndFocus() {
   nextTick(() => merge?.a.focus());
 }
 
+function syncSidebar() {
+  narrowScreen.value = sidebarMedia?.matches ?? false;
+  sidebar.value?.close();
+  sidebarOpen.value = false;
+  // Desktop chrome must not run the dialog's automatic focus steps.
+  if (sidebar.value && !narrowScreen.value) sidebar.value.open = true;
+}
+
+function openSidebar() {
+  sidebar.value?.showModal();
+  sidebarOpen.value = true;
+}
+
+function closeMobileSidebar() {
+  if (narrowScreen.value) sidebar.value?.close();
+}
+
+function selectLayout(value: 'split' | 'unified') {
+  layout.value = value;
+  closeMobileSidebar();
+}
+
+function dismissSidebar(event: MouseEvent) {
+  if (event.target !== sidebar.value || !narrowScreen.value) return;
+  const bounds = sidebar.value.getBoundingClientRect();
+  if (event.clientX < bounds.left || event.clientX >= bounds.right) sidebar.value.close();
+}
+
 function handleGlobalKeydown(e: KeyboardEvent) {
   if ((e.altKey && e.key === 'ArrowDown') || e.key === 'F7') {
     e.preventDefault();
@@ -359,7 +393,7 @@ function applyTheme(isDark: boolean) {
   const nextTheme = isDark ? 'dark' : 'light';
   if (document.documentElement.dataset.theme === nextTheme) return;
   const style = document.createElement('style');
-  style.textContent = '*:not(.preference-thumb), *::before, *::after { transition: none !important; }';
+  style.textContent = '*:not(.switch-thumb), *::before, *::after { transition: none !important; }';
   document.head.appendChild(style);
   document.documentElement.dataset.theme = nextTheme;
   void document.documentElement.offsetHeight;
@@ -405,6 +439,9 @@ watch(layout, async (value) => {
 });
 
 onMounted(async () => {
+  sidebarMedia = window.matchMedia('(max-width: 820px)');
+  sidebarMedia.addEventListener('change', syncSidebar);
+  syncSidebar();
   window.addEventListener('keydown', handleGlobalKeydown);
   window.addEventListener('dragover', preventWindowDrop);
   window.addEventListener('drop', preventWindowDrop);
@@ -432,6 +469,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  sidebarMedia?.removeEventListener('change', syncSidebar);
   merge?.destroy();
   unified?.destroy();
   window.removeEventListener('keydown', handleGlobalKeydown);
@@ -445,142 +483,144 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="app-shell">
-    <header class="topbar">
-      <div class="brand" aria-label="Diff">
-        <GitCompareArrows
-          class="brand-symbol"
-          :size="26"
-          aria-hidden="true"
-        />
-        <h1>Diff<span class="brand-period">.</span></h1>
-      </div>
+    <div class="mobile-bar">
+      <button
+        class="sidebar-trigger"
+        aria-controls="sidebar"
+        :aria-expanded="sidebarOpen"
+        @click="openSidebar"
+      >
+        <Menu :size="18" />{{ t('controls') }}
+      </button>
+    </div>
 
-      <div class="preferences">
-        <button
-          type="button"
-          class="preference-toggle"
-          role="switch"
-          :aria-checked="locale === 'en'"
-          :aria-label="t('englishMode')"
-          @click="locale = locale === 'zh' ? 'en' : 'zh'"
-        >
-          <span class="preference-state" aria-hidden="true">{{ locale === 'zh' ? '中' : 'EN' }}</span>
-          <span class="preference-track" aria-hidden="true"><span class="preference-thumb" /></span>
-          <span class="preference-tooltip" aria-hidden="true">{{ t(locale === 'zh' ? 'switchToEnglish' : 'switchToChinese') }}</span>
-        </button>
-        <button
-          type="button"
-          class="preference-toggle"
-          role="switch"
-          :aria-checked="dark"
-          :aria-label="t('darkMode')"
-          @click="theme = dark ? 'light' : 'dark'"
-        >
-          <span class="preference-state" aria-hidden="true">
-            <Moon v-if="dark" :size="17" />
-            <Sun v-else :size="17" />
-          </span>
-          <span class="preference-track" aria-hidden="true"><span class="preference-thumb" /></span>
-          <span class="preference-tooltip" aria-hidden="true">{{ t(dark ? 'switchToLight' : 'switchToDark') }}</span>
+    <dialog
+      id="sidebar"
+      ref="sidebar"
+      class="sidebar"
+      :role="narrowScreen ? 'dialog' : 'complementary'"
+      :aria-label="t('controls')"
+      @close="sidebarOpen = false"
+      @click="dismissSidebar"
+    >
+      <div class="sidebar-heading">
+        <div class="brand control-row" aria-label="Diff">
+          <GitCompareArrows
+            class="brand-symbol"
+            :size="26"
+            aria-hidden="true"
+          />
+          <h1>Diff<span class="brand-period">.</span></h1>
+        </div>
+        <button class="icon-button sidebar-close" :aria-label="t('closeSidebar')" @click="sidebar?.close()">
+          <X :size="18" />
         </button>
       </div>
-    </header>
 
-    <section ref="workspace" class="workspace" :aria-label="t('app')">
-      <div class="toolbar">
+      <div class="sidebar-controls">
         <div class="comparison-controls">
-          <div class="layout-switch" role="group" :aria-label="t('layout')">
-            <button
-              :class="{ selected: layout === 'split' }"
-              :aria-pressed="layout === 'split'"
-              :aria-label="t('split')"
-              :title="t('split')"
-              @click="layout = 'split'"
-            >
-              <Columns2 :size="15" /><span class="control-label"><span>{{ t('split') }}</span></span>
-            </button>
-            <button
-              :class="{ selected: layout === 'unified' }"
-              :aria-pressed="layout === 'unified'"
-              :aria-label="t('unified')"
-              :title="t('unified')"
-              @click="layout = 'unified'"
-            >
-              <Rows2 :size="15" /><span class="control-label"><span>{{ t('unified') }}</span></span>
-            </button>
-          </div>
+          <SwitchControl
+            :model-value="layout === 'unified'"
+            :label="t(layout)"
+            @update:model-value="selectLayout($event ? 'unified' : 'split')"
+          >
+            <Rows2 v-if="layout === 'unified'" :size="16" />
+            <Columns2 v-else :size="16" />
+          </SwitchControl>
 
           <div class="options">
-            <label class="option" :title="t('wrap')">
-              <input v-model="wrap" type="checkbox" :aria-label="t('wrap')">
-              <WrapText :size="15" />
-              <span class="control-label"><span>{{ t('wrap') }}</span></span>
-            </label>
-            <label class="option" :title="t('collapse')">
-              <input v-model="collapse" type="checkbox" :aria-label="t('collapse')">
-              <ChevronsDownUp :size="15" />
-              <span class="control-label"><span>{{ t('collapse') }}</span></span>
-            </label>
-            <label class="option" :class="{ 'rule-active': ignoreWhitespace }" :title="t('whitespace')">
-              <input v-model="ignoreWhitespace" type="checkbox" :aria-label="t('whitespace')">
-              <Space :size="15" />
-              <span class="control-label"><span>{{ t('whitespace') }}</span></span>
-            </label>
-          </div>
-          <div class="toolbar-actions">
-            <span class="toolbar-divider" aria-hidden="true" />
-            <button
-              class="clear-button"
-              :class="{ 'undo-clear': cleared }"
-              :disabled="isEmpty && !cleared"
-              :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
-              :title="t(cleared ? 'undoClear' : 'clearAll')"
-              @click="cleared ? undoClear($event) : clearAll($event)"
-            >
-              <Undo2 v-if="cleared" :size="15" />
-              <Trash2 v-else class="icon-remove" :size="15" />
-              <span class="control-label"><span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span></span>
-            </button>
+            <SwitchControl v-model="wrap" :label="t('wrap')">
+              <WrapText :size="16" />
+            </SwitchControl>
+            <SwitchControl v-model="collapse" :label="t('collapse')">
+              <ChevronsDownUp :size="16" />
+            </SwitchControl>
+            <SwitchControl v-model="ignoreWhitespace" :label="t('whitespace')">
+              <Space :size="16" />
+            </SwitchControl>
           </div>
         </div>
         <div class="diff-navigation">
-          <span
-            class="nav-label"
-            :class="{ 'has-diff': count && !busy }"
-            aria-live="polite"
-            :title="status"
-          >
-            <template v-if="count && !busy">
-              <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
-              }}<span class="nav-word">{{ t('differences') }}</span>
-            </template>
-            <template v-else>
-              <span class="status-dot" :class="{ success: !isEmpty && !busy }" /><span class="status-text">{{ status }}</span>
-            </template>
-          </span>
-          <div class="nav-buttons">
-            <button
-              class="icon-button"
-              :disabled="!count || busy"
-              :aria-label="t('previous')"
-              :title="t('previous')"
-              @click="jump(-1, $event)"
+          <div class="control-row">
+            <span class="navigation-icon" aria-hidden="true">
+              <span class="status-dot" :class="{ success: !isEmpty && !busy && !count }" />
+            </span>
+            <span
+              class="nav-label"
+              :class="{ 'has-diff': count && !busy }"
+              aria-live="polite"
+              :title="status"
             >
-              <ArrowUp :size="16" />
-            </button>
-            <button
-              class="icon-button"
-              :disabled="!count || busy"
-              :aria-label="t('next')"
-              :title="t('next')"
-              @click="jump(1, $event)"
-            >
-              <ArrowDown :size="16" />
-            </button>
+              <template v-if="count && !busy">
+                <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
+                }}<span class="nav-word">{{ t('differences') }}</span>
+              </template>
+              <template v-else>
+                <span class="status-text">{{ status }}</span>
+              </template>
+            </span>
+            <div class="nav-buttons">
+              <button
+                class="icon-button"
+                :disabled="!count || busy"
+                :aria-label="t('previous')"
+                :title="t('previous')"
+                @click="jump(-1, $event)"
+              >
+                <ArrowUp :size="16" />
+              </button>
+              <button
+                class="icon-button"
+                :disabled="!count || busy"
+                :aria-label="t('next')"
+                :title="t('next')"
+                @click="jump(1, $event)"
+              >
+                <ArrowDown :size="16" />
+              </button>
+            </div>
           </div>
+        </div>
+        <div class="toolbar-actions">
+          <button
+            class="clear-button control-row"
+            :class="{ 'undo-clear': cleared }"
+            :disabled="isEmpty && !cleared"
+            :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
+            :title="t(cleared ? 'undoClear' : 'clearAll')"
+            @click="cleared ? undoClear($event) : clearAll($event)"
+          >
+            <Undo2 v-if="cleared" :size="15" />
+            <Trash2 v-else class="icon-remove" :size="15" />
+            <span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span>
+          </button>
         </div>
       </div>
 
+      <div class="preferences">
+        <SwitchControl
+          :model-value="locale === 'en'"
+          :label="t('language')"
+          :accessible-label="t('englishMode')"
+          :tooltip="t(locale === 'zh' ? 'switchToEnglish' : 'switchToChinese')"
+          @update:model-value="locale = $event ? 'en' : 'zh'"
+        >
+          {{ locale === 'zh' ? '中' : 'EN' }}
+        </SwitchControl>
+        <SwitchControl
+          :model-value="dark"
+          :label="t('theme')"
+          :accessible-label="t('darkMode')"
+          :tooltip="t(dark ? 'switchToLight' : 'switchToDark')"
+          @update:model-value="theme = $event ? 'dark' : 'light'"
+        >
+          <Moon v-if="dark" :size="17" />
+          <Sun v-else :size="17" />
+        </SwitchControl>
+      </div>
+    </dialog>
+
+    <section ref="workspace" class="workspace" :aria-label="t('app')">
       <div
         v-if="notice"
         class="notice"
