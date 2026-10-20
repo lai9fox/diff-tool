@@ -442,6 +442,7 @@ svg {
   display: grid;
   grid-template-columns: 1fr 1fr;
   flex-shrink: 0;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
@@ -450,9 +451,9 @@ svg {
   align-items: center;
   justify-content: space-between;
   min-width: 0;
-  gap: clamp(4px, 1vw, 16px);
-  padding: 12px clamp(8px, 1.6vw, 18px);
-  min-height: 58px;
+  gap: clamp(4px, 1vw, 12px);
+  padding: 6px clamp(8px, 1.3vw, 16px);
+  min-height: 44px;
   flex-wrap: nowrap;
 }
 
@@ -469,14 +470,6 @@ svg {
   overflow: hidden;
 }
 
-.pane-name {
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, 0.7vw, 9px);
-  min-width: 0;
-  flex-shrink: 1;
-}
-
 .pane-stats {
   display: flex;
   align-items: center;
@@ -489,34 +482,12 @@ svg {
   overflow: hidden;
 }
 
-.pane-name h2 {
+.pane-info h2 {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.side-sign {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 21px;
-  height: 21px;
-  border-radius: 5px;
-  font-weight: 600;
+  font-weight: 550;
   flex-shrink: 0;
-}
-
-.side-sign.a {
-  background: var(--remove-bg);
-  color: var(--remove);
-}
-
-.side-sign.b {
-  background: var(--add-bg);
-  color: var(--add);
+  white-space: nowrap;
 }
 
 .file-name {
@@ -530,15 +501,16 @@ svg {
 
 .pane-actions {
   display: flex;
-  gap: clamp(2px, 0.8vw, 12px);
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .pane-actions button {
   gap: 0;
-  min-width: 54px;
-  font-size: 11px;
-  padding: 5px 6px;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px;
   color: var(--secondary);
   transition:
     color 0.15s,
@@ -549,8 +521,8 @@ svg {
 
 @media (hover: hover) {
   .pane-actions button:not(:disabled):hover {
-    background: var(--surface);
-    color: var(--text);
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 }
 
@@ -643,82 +615,6 @@ svg {
 
 .cm-merge-a .cm-changedText {
   background-color: var(--remove-mark) !important;
-}
-
-.empty-overlays {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.empty-cell {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 28px;
-  cursor: text;
-  pointer-events: none;
-}
-
-.empty-cell.is-empty {
-  pointer-events: auto;
-}
-
-.empty-state {
-  text-align: center;
-  transform: translateY(-32px);
-  max-width: 100%;
-  user-select: none;
-}
-
-.empty-file {
-  color: var(--muted);
-  display: inline-flex;
-  width: 54px;
-  height: 62px;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  margin-bottom: 12px;
-}
-
-.empty-file > span {
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  right: 1px;
-  bottom: 7px;
-  width: 20px;
-  height: 20px;
-  border: 3px solid var(--panel);
-  border-radius: 6px;
-}
-
-.empty-file .a {
-  background: var(--remove-bg);
-  color: var(--remove);
-}
-
-.empty-file .b {
-  background: var(--add-bg);
-  color: var(--add);
-}
-
-.empty-state h3 {
-  margin: 0 0 10px;
-  font-size: 17px;
-  font-weight: 550;
-  letter-spacing: -0.3px;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 22px;
-  color: var(--secondary);
 }
 
 .notice {
@@ -961,18 +857,6 @@ svg {
 
   .file-name {
     display: none;
-  }
-
-  .empty-cell {
-    padding: 14px;
-  }
-
-  .empty-state h3 {
-    font-size: 15px;
-  }
-
-  .empty-state p {
-    font-size: 11px;
   }
 }
 

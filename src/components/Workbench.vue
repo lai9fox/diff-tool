@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
-import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, placeholder } from '@codemirror/view';
 import { defaultKeymap, history, historyField, historyKeymap, indentWithTab, isolateHistory } from '@codemirror/commands';
 import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import {
@@ -98,10 +98,11 @@ function preferences() {
   }
 }
 
-function visualExtensions(side: Side): Extension[] {
+function visualExtensions(side: Side, editable = true): Extension[] {
   return [
     editorTheme(dark.value),
     accessibleCollapse,
+    editable ? placeholder(t('emptyHint')) : [],
     wrap.value ? EditorView.lineWrapping : [],
     EditorState.phrases.of({ '$ unchanged lines': t('unchanged') }),
     EditorView.contentAttributes.of({ 'aria-label': sideLabel(side), spellcheck: 'false' }),
@@ -211,7 +212,7 @@ function buildUnified() {
     extensions: [
       lineNumbers(),
       drawSelection(),
-      ...visualExtensions('b'),
+      ...visualExtensions('b', false),
       activeChunkField,
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
@@ -342,10 +343,6 @@ function dropped(event: DragEvent) {
   event.stopPropagation();
   readFile(dragSide.value, event.dataTransfer?.files[0]);
   dragSide.value = null;
-}
-
-function focusSide(side: Side) {
-  merge?.[side].focus();
 }
 
 function switchToSplitAndFocus() {
@@ -683,15 +680,9 @@ onBeforeUnmount(() => {
       <div v-if="layout === 'split'" class="pane-headers">
         <div v-for="side in (['a', 'b'] as const)" :key="side" class="pane-heading">
           <div class="pane-info">
-            <div class="pane-name">
-              <span class="side-sign" :class="side">
-                <Minus v-if="side === 'a'" :size="13" />
-                <Plus v-else :size="13" />
-              </span>
-              <h2 :title="sideLabel(side)">
-                {{ sideLabel(side) }}
-              </h2>
-            </div>
+            <h2 :title="sideLabel(side)">
+              {{ sideLabel(side) }}
+            </h2>
             <div v-if="texts[side]" class="pane-stats">
               <span>{{ lineCountLabel(side) }}</span>
             </div>
@@ -742,28 +733,6 @@ onBeforeUnmount(() => {
       >
         <div v-show="layout === 'split'" ref="splitHost" class="split-host" />
         <div v-show="layout === 'unified'" ref="unifiedHost" class="unified-host" />
-
-        <div v-if="layout === 'split'" class="empty-overlays">
-          <div
-            v-for="side in (['a', 'b'] as const)"
-            :key="side"
-            class="empty-cell"
-            :class="{ 'is-empty': !texts[side] }"
-            @click="focusSide(side)"
-          >
-            <div v-if="!texts[side]" class="empty-state">
-              <div class="empty-file">
-                <FileText :size="28" :stroke-width="1.25" />
-                <span :class="side">
-                  <Minus v-if="side === 'a'" :size="12" />
-                  <Plus v-else :size="12" />
-                </span>
-              </div>
-              <h3>{{ t(side === 'a' ? 'emptyA' : 'emptyB') }}</h3>
-              <p>{{ t('dropHint') }}</p>
-            </div>
-          </div>
-        </div>
 
         <div v-if="layout === 'unified' && isEmpty" class="unified-empty">
           <FileText :size="26" />

@@ -44,13 +44,16 @@ export function editorTheme(dark: boolean) {
       '&.cm-focused': { outline: 'none' },
       '.cm-content': { fontFamily: 'var(--font-code)', padding: '20px 0', caretColor: 'var(--accent)', minHeight: '100%' },
       '.cm-line': { padding: '0 16px 0 12px', lineHeight: '22px' },
+      '.cm-placeholder': { color: 'var(--secondary)', fontFamily: 'var(--font-ui)', fontSize: '13px', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
       '.cm-scroller': { fontFamily: 'var(--font-code)', lineHeight: '22px' },
       '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none', paddingTop: '0' },
       '.cm-lineNumbers .cm-gutterElement': { minWidth: '40px', padding: '0 10px 0 8px' },
       '.cm-cursor': { borderLeftColor: 'var(--accent)' },
       '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: 'var(--selection) !important' },
-      '.cm-activeLine': { backgroundColor: 'var(--active-line)' },
-      '.cm-activeLineGutter': { color: 'var(--text)', backgroundColor: 'var(--active-line)' },
+      '.cm-activeLine': { backgroundColor: 'transparent' },
+      '.cm-activeLineGutter': { color: 'var(--muted)', backgroundColor: 'transparent' },
+      '&.cm-focused .cm-activeLine': { backgroundColor: 'var(--active-line)' },
+      '&.cm-focused .cm-activeLineGutter': { color: 'var(--text)', backgroundColor: 'var(--active-line)' },
 
       // Diff styling for split and unified
       '&.cm-merge-a .cm-changedLine, .cm-deletedChunk, .cm-deletedLine': { backgroundColor: 'var(--remove-bg)' },
