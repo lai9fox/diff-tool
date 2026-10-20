@@ -14,6 +14,8 @@ import SwitchControl from './SwitchControl.vue';
 import CustomSelect from './CustomSelect.vue';
 import { diffStats, type ComparisonMethod, type DiffStats } from '../lib/diff';
 import { useResponsiveChrome } from '../lib/responsive-chrome';
+import { usePageLayout } from '../lib/page-layout';
+import { editorScrollbars, pageScrollIntoView } from '../lib/scrolling';
 import {
   accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
   diffConfig, editorTheme, setActiveChunkEffect,
@@ -47,7 +49,9 @@ const dragSide = ref<Side | null>(null);
 const sidebar = ref<HTMLDialogElement>();
 const sidebarOpen = ref(false);
 const narrowScreen = ref(false);
+usePageLayout(sidebar);
 
+const appShell = ref<HTMLElement>();
 const splitHost = ref<HTMLElement>();
 const workspace = ref<HTMLElement>();
 useResponsiveChrome(workspace);
@@ -61,6 +65,8 @@ let refreshTimer: ReturnType<typeof setTimeout>;
 let copiedTimer: ReturnType<typeof setTimeout>;
 let resizeObserver: ResizeObserver | undefined;
 let sidebarMedia: MediaQueryList | undefined;
+let restoreScrollFrame = 0;
+let pendingScrollTop: number | undefined;
 
 const slots = { a: new Compartment(), b: new Compartment() };
 
@@ -101,6 +107,8 @@ function preferences() {
 function visualExtensions(side: Side, editable = true): Extension[] {
   return [
     editorTheme(dark.value),
+    editorScrollbars,
+    pageScrollIntoView,
     accessibleCollapse,
     editable ? placeholder(t('emptyHint')) : [],
     wrap.value ? EditorView.lineWrapping : [],
@@ -175,11 +183,38 @@ function makeExtensions(side: Side, oldState?: EditorState): Extension[] {
   ];
 }
 
+function capturePageScroll() {
+  if (appShell.value && pendingScrollTop === undefined) {
+    appShell.value.style.minHeight = `${ appShell.value.getBoundingClientRect().height }px`;
+  }
+  return pendingScrollTop ?? window.scrollY;
+}
+
+function restorePageScroll(top: number) {
+  pendingScrollTop = top;
+  cancelAnimationFrame(restoreScrollFrame);
+  // Editor construction measures layout and can temporarily clamp body scroll.
+  // Keep the page from shrinking until both editor and merge measurements finish.
+  restoreScrollFrame = requestAnimationFrame(() => {
+    restoreScrollFrame = requestAnimationFrame(() => {
+      appShell.value?.style.removeProperty('min-height');
+      window.scrollTo({ top, behavior: 'instant' });
+      pendingScrollTop = undefined;
+    });
+  });
+}
+
+function cancelScrollRestore() {
+  cancelAnimationFrame(restoreScrollFrame);
+  appShell.value?.style.removeProperty('min-height');
+  pendingScrollTop = undefined;
+}
+
 function buildSplit() {
   if (!splitHost.value) return;
+  const scrollTop = capturePageScroll();
   const oldA = merge?.a.state;
   const oldB = merge?.b.state;
-  const scroll = merge?.a.scrollDOM.scrollTop || 0;
   merge?.destroy();
   merge = new MergeView({
     a: { doc: texts.value.a, selection: oldA?.selection, extensions: makeExtensions('a', oldA) },
@@ -190,21 +225,13 @@ function buildSplit() {
     diffConfig: diffConfig(ignoreWhitespace.value, comparisonMethod.value),
     collapseUnchanged: collapse.value ? { margin: 3, minSize: 4 } : undefined,
   });
-  const { a, b } = merge;
-  const syncScroll = (source: EditorView, target: EditorView) => {
-    if (target.scrollDOM.scrollTop !== source.scrollDOM.scrollTop) {
-      target.scrollDOM.scrollTop = source.scrollDOM.scrollTop;
-    }
-  };
-  a.scrollDOM.addEventListener('scroll', () => syncScroll(a, b));
-  b.scrollDOM.addEventListener('scroll', () => syncScroll(b, a));
-  a.scrollDOM.scrollTop = b.scrollDOM.scrollTop = scroll;
+  restorePageScroll(scrollTop);
   queueRefresh();
 }
 
 function buildUnified() {
   if (!unifiedHost.value || !merge) return;
-  const scroll = unified?.scrollDOM.scrollTop || 0;
+  const scrollTop = capturePageScroll();
   unified?.destroy();
   unified = new EditorView({
     parent: unifiedHost.value,
@@ -232,7 +259,7 @@ function buildUnified() {
       }),
     ],
   });
-  unified.scrollDOM.scrollTop = scroll;
+  restorePageScroll(scrollTop);
   updateActiveChunkHighlight();
 }
 
@@ -257,8 +284,8 @@ function clearAll(event?: Event) {
   replaceText('b', '');
   count.value = current.value = 0;
   stats.value = { added: 0, modified: 0, deleted: 0 };
-  merge.a.scrollDOM.scrollTop = merge.b.scrollDOM.scrollTop = 0;
-  if (unified) unified.scrollDOM.scrollTop = 0;
+  cancelScrollRestore();
+  window.scrollTo({ top: 0, behavior: 'instant' });
   // Snapshot saved after editor transactions invalidate previous snapshots
   cleared.value = snapshot;
 }
@@ -276,6 +303,7 @@ function undoClear(event?: Event) {
 function jump(direction: number, event?: Event) {
   (event?.currentTarget as HTMLElement | null)?.blur();
   if (!merge || !count.value) return;
+  cancelScrollRestore();
   closeMobileSidebar();
   current.value = ((current.value - 1 + direction + count.value) % count.value) + 1;
   const chunk = merge.chunks[current.value - 1];
@@ -289,8 +317,9 @@ function jump(direction: number, event?: Event) {
     for (const side of ['a', 'b'] as Side[]) {
       const view = merge[side];
       const pos = Math.min(side === 'a' ? chunk.fromA : chunk.fromB, view.state.doc.length);
-      view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
+      view.dispatch({ selection: { anchor: pos } });
     }
+    merge.a.dispatch({ effects: EditorView.scrollIntoView(Math.min(chunk.fromA, merge.a.state.doc.length), { y: 'center' }) });
   }
 }
 
@@ -410,6 +439,7 @@ function applyTheme(isDark: boolean) {
 }
 
 watch([locale, theme, wrap, collapse, layout, comparisonMethod], preferences);
+watch(sidebarOpen, open => document.documentElement.toggleAttribute('data-sidebar-open', open));
 watch([dark, locale, wrap], () => {
   applyTheme(dark.value);
   document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en';
@@ -432,6 +462,7 @@ watch([ignoreWhitespace, comparisonMethod], () => {
 });
 
 watch(layout, async (value) => {
+  const scrollTop = capturePageScroll();
   await nextTick();
   if (value === 'unified') {
     buildUnified();
@@ -441,6 +472,7 @@ watch(layout, async (value) => {
     merge?.a.requestMeasure();
     merge?.b.requestMeasure();
   }
+  restorePageScroll(scrollTop);
 });
 
 onMounted(async () => {
@@ -484,11 +516,12 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearTimeout(refreshTimer);
   clearTimeout(copiedTimer);
+  cancelScrollRestore();
 });
 </script>
 
 <template>
-  <main class="app-shell">
+  <main ref="appShell" class="app-shell">
     <div class="mobile-bar">
       <button
         class="sidebar-trigger"
@@ -561,83 +594,85 @@ onBeforeUnmount(() => {
             </SwitchControl>
           </div>
         </div>
-        <div class="toolbar-actions">
-          <button
-            class="clear-button control-row"
-            :class="{ 'undo-clear': cleared }"
-            :disabled="isEmpty && !cleared"
-            :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
-            :title="t(cleared ? 'undoClear' : 'clearAll')"
-            @click="cleared ? undoClear($event) : clearAll($event)"
-          >
-            <Undo2 v-if="cleared" :size="15" />
-            <Trash2 v-else class="icon-remove" :size="15" />
-            <span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span>
-          </button>
-        </div>
         <div class="diff-navigation">
-          <div class="control-row">
-            <span class="navigation-icon" aria-hidden="true">
-              <span class="status-dot" :class="{ success: !isEmpty && !busy && !count }" />
-            </span>
-            <span
-              class="nav-label"
-              :class="{ 'has-diff': count && !busy }"
-              aria-live="polite"
-              :title="status"
-            >
-              <template v-if="count && !busy">
-                <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
-                }}<span class="nav-word">{{ t('differences') }}</span>
-              </template>
-              <template v-else>
-                <span class="status-text">{{ status }}</span>
-              </template>
-            </span>
-            <div class="nav-buttons">
-              <button
-                class="icon-button"
-                :disabled="!count || busy"
-                :aria-label="t('previous')"
-                :title="t('previous')"
-                @click="jump(-1, $event)"
+          <div class="diff-information">
+            <div class="control-row">
+              <span class="navigation-icon" aria-hidden="true">
+                <span class="status-dot" :class="{ success: !isEmpty && !busy && !count }" />
+              </span>
+              <span
+                class="nav-label"
+                :class="{ 'has-diff': count && !busy }"
+                aria-live="polite"
+                :title="status"
               >
-                <ArrowUp :size="16" />
-              </button>
-              <button
-                class="icon-button"
-                :disabled="!count || busy"
-                :aria-label="t('next')"
-                :title="t('next')"
-                @click="jump(1, $event)"
-              >
-                <ArrowDown :size="16" />
-              </button>
+                <template v-if="count && !busy">
+                  <strong>{{ current }}</strong><span class="nav-slash">/</span>{{ count
+                  }}<span class="nav-word">{{ t('differences') }}</span>
+                </template>
+                <template v-else>
+                  <span class="status-text">{{ status }}</span>
+                </template>
+              </span>
+              <div class="nav-buttons">
+                <button
+                  class="icon-button"
+                  :disabled="!count || busy"
+                  :aria-label="t('previous')"
+                  :title="t('previous')"
+                  @click="jump(-1, $event)"
+                >
+                  <ArrowUp :size="16" />
+                </button>
+                <button
+                  class="icon-button"
+                  :disabled="!count || busy"
+                  :aria-label="t('next')"
+                  :title="t('next')"
+                  @click="jump(1, $event)"
+                >
+                  <ArrowDown :size="16" />
+                </button>
+              </div>
             </div>
+            <dl
+              v-if="!isEmpty"
+              class="diff-stats"
+              :aria-label="t('diffStats')"
+              :aria-busy="busy"
+            >
+              <div
+                v-for="kind in (['added', 'modified', 'deleted'] as const)"
+                :key="kind"
+                class="control-row"
+                :class="`stat-${ kind }`"
+              >
+                <dt>
+                  <span class="stat-icon" aria-hidden="true">
+                    <Plus v-if="kind === 'added'" :size="14" />
+                    <Pencil v-else-if="kind === 'modified'" :size="14" />
+                    <Minus v-else :size="14" />
+                  </span>
+                  <span>{{ t(kind === 'modified' ? 'changedLines' : kind) }}</span>
+                </dt>
+                <dd>{{ busy ? '…' : stats[kind].toLocaleString(locale === 'zh' ? 'zh-CN' : 'en') }} {{ t(locale === 'en' && stats[kind] === 1 ? 'line' : 'lines') }}</dd>
+              </div>
+            </dl>
           </div>
-          <dl
-            v-if="!isEmpty"
-            class="diff-stats"
-            :aria-label="t('diffStats')"
-            :aria-busy="busy"
-          >
-            <div
-              v-for="kind in (['added', 'modified', 'deleted'] as const)"
-              :key="kind"
-              class="control-row"
-              :class="`stat-${ kind }`"
+          <div class="toolbar-actions">
+            <button
+              class="clear-button control-row"
+              :class="{ 'undo-clear': cleared }"
+              :disabled="isEmpty && !cleared"
+              :aria-label="t(cleared ? 'undoClear' : 'clearAll')"
+              :title="t(cleared ? 'undoClear' : 'clearAll')"
+              @click="cleared ? undoClear($event) : clearAll($event)"
             >
-              <dt>
-                <span class="stat-icon" aria-hidden="true">
-                  <Plus v-if="kind === 'added'" :size="14" />
-                  <Pencil v-else-if="kind === 'modified'" :size="14" />
-                  <Minus v-else :size="14" />
-                </span>
-                <span>{{ t(kind === 'modified' ? 'changedLines' : kind) }}</span>
-              </dt>
-              <dd>{{ busy ? '…' : stats[kind].toLocaleString(locale === 'zh' ? 'zh-CN' : 'en') }} {{ t(locale === 'en' && stats[kind] === 1 ? 'line' : 'lines') }}</dd>
-            </div>
-          </dl>
+              <Undo2 v-if="cleared" :size="15" />
+              <Trash2 v-else class="icon-remove" :size="15" />
+              <span>{{ t(cleared ? 'undoClear' : 'clearAll') }}</span>
+            </button>
+          </div>
         </div>
       </div>
 

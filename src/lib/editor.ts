@@ -42,7 +42,7 @@ export function editorTheme(dark: boolean) {
     EditorView.theme({
       '&': { backgroundColor: 'var(--panel)', color: 'var(--text)', fontSize: '14px' },
       '&.cm-focused': { outline: 'none' },
-      '.cm-content': { fontFamily: 'var(--font-code)', padding: '20px 0', caretColor: 'var(--accent)', minHeight: '100%' },
+      '.cm-content': { fontFamily: 'var(--font-code)', padding: '8px 0', caretColor: 'var(--accent)', minHeight: '100%' },
       '.cm-line': { padding: '0 16px 0 12px', lineHeight: '22px' },
       '.cm-placeholder': { color: 'var(--secondary)', fontFamily: 'var(--font-ui)', fontSize: '13px', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
       '.cm-scroller': { fontFamily: 'var(--font-code)', lineHeight: '22px' },

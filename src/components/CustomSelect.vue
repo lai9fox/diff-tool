@@ -61,7 +61,7 @@ function toggle() {
 function selectOption(value: T) {
   emit('update:modelValue', value);
   closeMenu();
-  triggerRef.value?.focus();
+  triggerRef.value?.focus({ preventScroll: true });
 }
 
 function onTriggerKeydown(event: KeyboardEvent) {
@@ -85,7 +85,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
     if (isOpen.value) {
       event.preventDefault();
       closeMenu();
-      triggerRef.value?.focus();
+      triggerRef.value?.focus({ preventScroll: true });
     }
   } else if (event.key === 'Tab') {
     if (isOpen.value) {

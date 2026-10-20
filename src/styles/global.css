@@ -18,7 +18,9 @@
   --remove: #b14158;
   --remove-bg: #fdf1f3;
   --remove-mark: #f5ccd5;
-  --clear-hover: #f8e1e7;
+  --clear-bg: #f8e1e7;
+  --clear-border: #e6b8c3;
+  --clear-hover: #f2cdd7;
   --shadow-popover:
     0 4px 18px rgb(20 40 71 / 10%), 0 2px 6px rgb(20 40 71 / 6%);
   --font-ui:
@@ -53,7 +55,9 @@
   --remove: #f29db0;
   --remove-bg: #402d3b;
   --remove-mark: #653b4b;
-  --clear-hover: #402d3b;
+  --clear-bg: #4c303c;
+  --clear-border: #714052;
+  --clear-hover: #5b3645;
   --shadow-popover: 0 10px 28px rgb(0 0 0 / 50%), 0 2px 8px rgb(0 0 0 / 35%);
 }
 
@@ -123,33 +127,41 @@ svg {
 }
 
 .app-shell {
-  height: 100dvh;
-  min-height: 0;
+  --editor-min-height: calc(100dvh - 79px);
+
+  min-height: 100dvh;
   padding: 16px;
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   gap: 16px;
+  overflow-anchor: none;
 }
 
 .sidebar {
-  position: static;
+  position: sticky;
+  top: 16px;
+  align-self: start;
   width: 224px;
-  height: 100%;
+  height: auto;
   max-width: none;
   max-height: none;
-  min-height: 0;
+  min-height: calc(100dvh - 32px);
   margin: 0;
   padding: 0;
   border: 0;
   color: var(--text);
   background: var(--bg);
-  overflow: auto;
+  overflow: visible;
   flex-direction: column;
   gap: 24px;
 }
 
 .sidebar[open] {
   display: flex;
+}
+
+:root[data-sidebar-overflow] .sidebar {
+  position: static;
 }
 
 .sidebar button:focus-visible {
@@ -197,9 +209,18 @@ svg {
 }
 
 .diff-navigation {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  justify-content: space-between;
+  gap: 16px;
   min-width: 0;
   padding-top: 18px;
   border-top: 1px solid var(--border);
+}
+
+.diff-information {
+  flex-shrink: 0;
 }
 
 .nav-label {
@@ -293,27 +314,26 @@ svg {
   flex-direction: column;
   flex-shrink: 0;
   gap: 4px;
-  margin: auto 0 0;
   padding: 16px 0 4px;
   border-top: 1px solid var(--border);
 }
 
 .workspace {
   min-width: 0;
-  min-height: 0;
+  min-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 3px 12px #263c5c03;
 }
 
 .sidebar-controls {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  flex: 1 0 auto;
   gap: 18px;
 }
 
@@ -382,6 +402,7 @@ svg {
 
 .toolbar-actions {
   display: flex;
+  flex-shrink: 0;
 }
 
 .clear-button {
@@ -389,18 +410,23 @@ svg {
   min-width: 82px;
   min-height: 40px;
   text-align: left;
-  color: var(--secondary);
+  border: 1px solid var(--clear-border);
+  background: var(--clear-bg);
+  color: var(--remove);
   font-size: 12px;
+  font-weight: 550;
   transition:
     color 0.15s,
     background-color 0.15s,
+    border-color 0.15s,
     padding 180ms ease-out,
     min-width 180ms ease-out;
 }
 
 .clear-button.undo-clear {
+  border-color: var(--selection);
+  background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 550;
 }
 
 @media (hover: hover) {
@@ -444,6 +470,14 @@ svg {
   flex-shrink: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  border-radius: 9px 9px 0 0;
+}
+
+.pane-headers,
+.readonly-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .pane-heading {
@@ -540,22 +574,23 @@ svg {
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: clip;
+  border-radius: 0 0 9px 9px;
 }
 
 .split-host,
 .unified-host {
-  height: 100%;
+  min-height: var(--editor-min-height);
 }
 
 .cm-mergeView {
-  height: 100%;
-  overflow: hidden;
+  min-height: var(--editor-min-height);
 }
 
 .cm-mergeViewEditors {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: 100%;
+  min-height: var(--editor-min-height);
 }
 
 .cm-mergeViewEditor {
@@ -566,21 +601,42 @@ svg {
   border-left: 1px solid var(--border);
 }
 
-.cm-mergeView .cm-mergeViewEditor .cm-editor {
-  height: 100% !important;
-}
-
-.cm-mergeView .cm-mergeViewEditor .cm-scroller {
-  height: 100% !important;
-  overflow: auto !important;
-}
-
+.cm-mergeView .cm-editor,
 .unified-host > .cm-editor {
-  height: 100%;
+  min-height: var(--editor-min-height);
 }
 
-.unified-host .cm-scroller {
-  overflow: auto;
+.cm-editor .cm-scroller {
+  flex: 1;
+  overflow-y: visible;
+}
+
+.os-theme-workbench {
+  --os-size: 10px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 3px;
+  --os-track-border-radius: 999px;
+  --os-handle-border-radius: 999px;
+  --os-handle-bg: rgb(83 95 112 / 40%);
+  --os-handle-bg-hover: rgb(83 95 112 / 60%);
+  --os-handle-bg-active: rgb(83 95 112 / 75%);
+  --os-handle-perpendicular-size: 100%;
+  --os-handle-perpendicular-size-hover: 100%;
+  --os-handle-perpendicular-size-active: 100%;
+}
+
+:root[data-theme='dark'] .os-theme-workbench {
+  --os-handle-bg: rgb(176 188 205 / 45%);
+  --os-handle-bg-hover: rgb(176 188 205 / 65%);
+  --os-handle-bg-active: rgb(176 188 205 / 80%);
+}
+
+:root[data-sidebar-open] {
+  overflow: hidden !important;
+}
+
+:root[data-sidebar-open] > body > .os-scrollbar {
+  display: none;
 }
 
 /* Diff highlights in both split and unified */
@@ -638,12 +694,13 @@ svg {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  min-height: 48px;
-  padding: 8px 18px;
+  min-height: 45px;
+  padding: 5px 18px;
   background: var(--surface);
   font-size: 11px;
   color: var(--secondary);
   border-bottom: 1px solid var(--border);
+  border-radius: 9px 9px 0 0;
 }
 
 .readonly-heading,
@@ -819,6 +876,8 @@ svg {
 
 @media (width <= 820px) {
   .app-shell {
+    --editor-min-height: calc(100dvh - 115px);
+
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     padding: 10px;
@@ -842,8 +901,15 @@ svg {
     width: min(280px, calc(100vw - 48px));
     height: 100dvh;
     max-height: 100dvh;
+    min-height: 0;
     padding: 16px;
     border-right: 1px solid var(--border);
+    overflow: var(--os-viewport-overflow-x, hidden)
+      var(--os-viewport-overflow-y, auto);
+  }
+
+  .workspace {
+    min-height: calc(100dvh - 68px);
   }
 
   .sidebar::backdrop {
