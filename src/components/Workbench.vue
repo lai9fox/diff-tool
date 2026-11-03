@@ -49,7 +49,8 @@ const dragSide = ref<Side | null>(null);
 const sidebar = ref<HTMLDialogElement>();
 const sidebarOpen = ref(false);
 const narrowScreen = ref(false);
-usePageLayout(sidebar);
+const headerAnchor = ref<HTMLElement>();
+usePageLayout(sidebar, headerAnchor);
 
 const appShell = ref<HTMLElement>();
 const splitHost = ref<HTMLElement>();
@@ -712,6 +713,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <div ref="headerAnchor" class="header-anchor" aria-hidden="true" />
       <div v-if="layout === 'split'" class="pane-headers">
         <div v-for="side in (['a', 'b'] as const)" :key="side" class="pane-heading">
           <div class="pane-info">

@@ -1,50 +1,48 @@
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 import { drawerScrollbars, pageScrollbars } from './scrolling';
 
-export function usePageLayout(sidebar: Ref<HTMLDialogElement | undefined>) {
-  let observer: ResizeObserver | undefined;
+export function usePageLayout(
+  sidebar: Ref<HTMLDialogElement | undefined>,
+  headerAnchor: Ref<HTMLElement | undefined>,
+) {
+  let observer: IntersectionObserver | undefined;
+  let sidebarObserver: ResizeObserver | undefined;
+  let scrollbarFrame = 0;
   let page: ReturnType<typeof pageScrollbars> | undefined;
   let drawer: ReturnType<typeof drawerScrollbars> | undefined;
-  let media: MediaQueryList | undefined;
-
-  const measure = () => {
-    if (!sidebar.value || media?.matches) {
-      document.documentElement.removeAttribute('data-sidebar-overflow');
-      return;
-    }
-    // Measure the actual content, including statistics, translations and zoom.
-    const gap = Number.parseFloat(getComputedStyle(sidebar.value.parentElement!).paddingTop);
-    document.documentElement.toggleAttribute(
-      'data-sidebar-overflow',
-      sidebar.value.getBoundingClientRect().height + gap * 2 > window.innerHeight + 1,
-    );
-  };
-
-  const syncDrawer = () => {
-    drawer?.destroy();
-    drawer = media?.matches && sidebar.value ? drawerScrollbars(sidebar.value) : undefined;
-    measure();
-  };
 
   onMounted(() => {
     page = pageScrollbars();
-    media = window.matchMedia('(max-width: 820px)');
-    media.addEventListener('change', syncDrawer);
-    observer = new ResizeObserver(measure);
-    if (sidebar.value) observer.observe(sidebar.value);
-    window.addEventListener('resize', measure);
-    window.visualViewport?.addEventListener('resize', measure);
-    syncDrawer();
+    if (sidebar.value) drawer = drawerScrollbars(sidebar.value);
+    sidebarObserver = new ResizeObserver(() => {
+      const target = sidebar.value;
+      const contentEnd = target?.querySelector('.preferences');
+      if (!target || !contentEnd) return;
+      // The scrollbar is inside its own viewport. Its translated track can
+      // retain stale overflow after a resize, so measure real content instead.
+      const bottom = contentEnd.getBoundingClientRect().bottom
+        - target.getBoundingClientRect().top + target.scrollTop;
+      const padding = Number.parseFloat(getComputedStyle(target).paddingBottom);
+      const maxScroll = Math.max(0, bottom + padding - target.clientHeight);
+      if (target.scrollTop > maxScroll) target.scrollTop = maxScroll;
+      // Let the scroll event reposition the track before measuring overflow.
+      cancelAnimationFrame(scrollbarFrame);
+      scrollbarFrame = requestAnimationFrame(() => drawer?.update(true));
+    });
+    if (sidebar.value) sidebarObserver.observe(sidebar.value);
+    // Track the header's natural position, which also accounts for notices above it.
+    observer = new IntersectionObserver(([entry]) => {
+      entry.target.parentElement?.toggleAttribute('data-header-stuck', entry.boundingClientRect.top <= 0);
+    }, { rootMargin: '-1px 0px 0px 0px' });
+    if (headerAnchor.value) observer.observe(headerAnchor.value);
   });
 
   onBeforeUnmount(() => {
     observer?.disconnect();
-    media?.removeEventListener('change', syncDrawer);
-    window.removeEventListener('resize', measure);
-    window.visualViewport?.removeEventListener('resize', measure);
+    sidebarObserver?.disconnect();
+    cancelAnimationFrame(scrollbarFrame);
     drawer?.destroy();
     page?.destroy();
-    document.documentElement.removeAttribute('data-sidebar-overflow');
     document.documentElement.removeAttribute('data-sidebar-open');
   });
 }

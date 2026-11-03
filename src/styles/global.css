@@ -142,26 +142,24 @@ svg {
   top: 16px;
   align-self: start;
   width: 224px;
-  height: auto;
+  height: calc(100dvh - 32px);
   max-width: none;
-  max-height: none;
-  min-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 0;
   color: var(--text);
   background: var(--bg);
-  overflow: visible;
+  overflow: var(--os-viewport-overflow-x, hidden)
+    var(--os-viewport-overflow-y, auto);
+  overscroll-behavior-y: contain;
   flex-direction: column;
   gap: 24px;
 }
 
 .sidebar[open] {
   display: flex;
-}
-
-:root[data-sidebar-overflow] .sidebar {
-  position: static;
 }
 
 .sidebar button:focus-visible {
@@ -480,6 +478,15 @@ svg {
   z-index: 5;
 }
 
+.header-anchor {
+  height: 0;
+  flex-shrink: 0;
+}
+
+.workspace[data-header-stuck] > :is(.pane-headers, .readonly-bar) {
+  border-radius: 0;
+}
+
 .pane-heading {
   display: flex;
   align-items: center;
@@ -571,6 +578,8 @@ svg {
 }
 
 .editor-area {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   position: relative;
@@ -580,14 +589,21 @@ svg {
 
 .split-host,
 .unified-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: var(--editor-min-height);
 }
 
 .cm-mergeView {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: var(--editor-min-height);
 }
 
 .cm-mergeViewEditors {
+  flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: var(--editor-min-height);
