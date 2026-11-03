@@ -127,9 +127,8 @@ svg {
 }
 
 .app-shell {
-  --editor-min-height: calc(100dvh - 79px);
-
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   padding: 16px;
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
@@ -318,7 +317,7 @@ svg {
 
 .workspace {
   min-width: 0;
-  min-height: calc(100dvh - 32px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -592,24 +591,27 @@ svg {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: var(--editor-min-height);
+  min-height: 0;
 }
 
 .cm-mergeView {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: var(--editor-min-height);
+  min-height: 0;
 }
 
 .cm-mergeViewEditors {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: var(--editor-min-height);
+  min-height: 0;
 }
 
 .cm-mergeViewEditor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -619,12 +621,15 @@ svg {
 
 .cm-mergeView .cm-editor,
 .unified-host > .cm-editor {
-  min-height: var(--editor-min-height);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cm-editor .cm-scroller {
   flex: 1;
-  overflow-y: visible;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .os-theme-workbench {
@@ -892,8 +897,6 @@ svg {
 
 @media (width <= 820px) {
   .app-shell {
-    --editor-min-height: calc(100dvh - 115px);
-
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     padding: 10px;
@@ -922,10 +925,6 @@ svg {
     border-right: 1px solid var(--border);
     overflow: var(--os-viewport-overflow-x, hidden)
       var(--os-viewport-overflow-y, auto);
-  }
-
-  .workspace {
-    min-height: calc(100dvh - 68px);
   }
 
   .sidebar::backdrop {

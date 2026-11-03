@@ -15,7 +15,7 @@ import CustomSelect from './CustomSelect.vue';
 import { diffStats, type ComparisonMethod, type DiffStats } from '../lib/diff';
 import { useResponsiveChrome } from '../lib/responsive-chrome';
 import { usePageLayout } from '../lib/page-layout';
-import { editorScrollbars, pageScrollIntoView } from '../lib/scrolling';
+import { editorScrollbars, syncEditorScroll } from '../lib/scrolling';
 import {
   accessibleCollapse, activeChunkField, buildActiveChunkDecoration,
   diffConfig, editorTheme, setActiveChunkEffect,
@@ -61,6 +61,7 @@ const fileA = ref<HTMLInputElement>();
 const fileB = ref<HTMLInputElement>();
 
 let merge: MergeView | undefined;
+let stopScrollSync: (() => void) | undefined;
 let unified: EditorView | undefined;
 let refreshTimer: ReturnType<typeof setTimeout>;
 let copiedTimer: ReturnType<typeof setTimeout>;
@@ -109,7 +110,6 @@ function visualExtensions(side: Side, editable = true): Extension[] {
   return [
     editorTheme(dark.value),
     editorScrollbars,
-    pageScrollIntoView,
     accessibleCollapse,
     editable ? placeholder(t('emptyHint')) : [],
     wrap.value ? EditorView.lineWrapping : [],
@@ -216,6 +216,7 @@ function buildSplit() {
   const scrollTop = capturePageScroll();
   const oldA = merge?.a.state;
   const oldB = merge?.b.state;
+  stopScrollSync?.();
   merge?.destroy();
   merge = new MergeView({
     a: { doc: texts.value.a, selection: oldA?.selection, extensions: makeExtensions('a', oldA) },
@@ -226,6 +227,7 @@ function buildSplit() {
     diffConfig: diffConfig(ignoreWhitespace.value, comparisonMethod.value),
     collapseUnchanged: collapse.value ? { margin: 3, minSize: 4 } : undefined,
   });
+  stopScrollSync = syncEditorScroll(merge.a, merge.b);
   restorePageScroll(scrollTop);
   queueRefresh();
 }
@@ -318,9 +320,8 @@ function jump(direction: number, event?: Event) {
     for (const side of ['a', 'b'] as Side[]) {
       const view = merge[side];
       const pos = Math.min(side === 'a' ? chunk.fromA : chunk.fromB, view.state.doc.length);
-      view.dispatch({ selection: { anchor: pos } });
+      view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
     }
-    merge.a.dispatch({ effects: EditorView.scrollIntoView(Math.min(chunk.fromA, merge.a.state.doc.length), { y: 'center' }) });
   }
 }
 
@@ -509,6 +510,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   sidebarMedia?.removeEventListener('change', syncSidebar);
+  stopScrollSync?.();
   merge?.destroy();
   unified?.destroy();
   window.removeEventListener('keydown', handleGlobalKeydown);

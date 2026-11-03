@@ -1,5 +1,5 @@
 import { OverlayScrollbars, type PartialOptions } from 'overlayscrollbars';
-import { EditorView, ViewPlugin } from '@codemirror/view';
+import { type EditorView, ViewPlugin } from '@codemirror/view';
 
 const scrollbars: PartialOptions['scrollbars'] = {
   theme: 'os-theme-workbench',
@@ -29,49 +29,42 @@ export const editorScrollbars = ViewPlugin.define(view => {
     target: view.dom,
     elements: { viewport: view.scrollDOM },
   }, {
-    overflow: { x: 'scroll', y: 'visible' },
+    overflow: { x: 'scroll', y: 'scroll' },
     scrollbars,
   });
-  return { destroy: () => instance.destroy() };
+  // Merge alignment adds blank spacer rows even to an empty document.
+  // Keep its input hint and caret at the top when that blank area is clicked.
+  const keepEmptyAtTop = () => {
+    if (!view.state.doc.length) view.scrollDOM.scrollTop = 0;
+  };
+  view.scrollDOM.addEventListener('scroll', keepEmptyAtTop);
+  return {
+    update: keepEmptyAtTop,
+    destroy() {
+      view.scrollDOM.removeEventListener('scroll', keepEmptyAtTop);
+      instance.destroy();
+    },
+  };
 });
 
-// Account for the sticky header when CodeMirror reveals a cursor or a diff.
-export const pageScrollIntoView = EditorView.scrollHandler.of((view, range, options) => {
-  if (!view.dom.getClientRects().length) return false;
-  // Handlers run during CodeMirror's write phase. Read coordinates in its
-  // next measurement phase, then perform both scrolls together.
-  view.requestMeasure({
-    key: pageScrollIntoView,
-    read() {
-      const rect = view.coordsAtPos(Math.min(range.head, view.state.doc.length));
-      if (!rect) return null;
-      const header = view.dom.closest('.workspace')?.querySelector('.pane-headers, .readonly-bar');
-      const top = Math.max(0, header?.getBoundingClientRect().bottom ?? 0) + options.yMargin;
-      const bottom = (window.visualViewport?.height ?? window.innerHeight) - options.yMargin;
-      let y = 0;
-      if (options.y === 'center') y = (rect.top + rect.bottom - top - bottom) / 2;
-      else if (options.y === 'start') y = rect.top - top;
-      else if (options.y === 'end') y = rect.bottom - bottom;
-      else if (rect.top < top) y = rect.top - top;
-      else if (rect.bottom > bottom) y = rect.bottom - bottom;
-
-      const viewport = view.scrollDOM.getBoundingClientRect();
-      const gutters = view.dom.querySelector('.cm-gutters')?.getBoundingClientRect().right ?? viewport.left;
-      const left = Math.max(viewport.left, gutters) + options.xMargin;
-      const right = viewport.right - options.xMargin;
-      let x = 0;
-      if (options.x === 'center') x = (rect.left + rect.right - left - right) / 2;
-      else if (options.x === 'start') x = rect.left - left;
-      else if (options.x === 'end') x = rect.right - right;
-      else if (rect.left < left) x = rect.left - left;
-      else if (rect.right > right) x = rect.right - right;
-      return { x, y };
-    },
-    write(delta) {
-      if (!delta) return;
-      if (delta.y) window.scrollBy({ top: delta.y, behavior: 'instant' });
-      if (delta.x) view.scrollDOM.scrollLeft += delta.x;
-    },
-  });
-  return true;
-});
+// MergeView inserts alignment spacers, so equal vertical offsets keep rows paired.
+export function syncEditorScroll(a: EditorView, b: EditorView) {
+  const positions = new Map<EditorView, number>();
+  const sync = (source: EditorView, target: EditorView) => {
+    const top = source.scrollDOM.scrollTop;
+    if (positions.get(source) === top) return;
+    positions.set(source, top);
+    if (!source.state.doc.length || !target.state.doc.length) return;
+    target.scrollDOM.scrollTop = top;
+    // Ignore the resulting scroll event, including offsets clamped at the end.
+    positions.set(target, target.scrollDOM.scrollTop);
+  };
+  const fromA = () => sync(a, b);
+  const fromB = () => sync(b, a);
+  a.scrollDOM.addEventListener('scroll', fromA);
+  b.scrollDOM.addEventListener('scroll', fromB);
+  return () => {
+    a.scrollDOM.removeEventListener('scroll', fromA);
+    b.scrollDOM.removeEventListener('scroll', fromB);
+  };
+}
