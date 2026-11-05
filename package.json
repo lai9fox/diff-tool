@@ -22,15 +22,10 @@
   },
   "dependencies": {
     "@astrojs/vue": "^7.0.3",
-    "@codemirror/commands": "^6.11.1",
-    "@codemirror/merge": "^6.12.2",
-    "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.13",
-    "@fontsource/jetbrains-mono": "^5.3.0",
     "@lucide/vue": "^1.48.0",
     "astro": "^7.3.5",
-    "overlayscrollbars": "^2.16.0",
-    "vue": "^3.5.43"
+    "vue": "^3.5.43",
+    "monaco-editor": "^0.57.0"
   },
   "devDependencies": {
     "@lai9fox/eslint-config": "^3.0.0",
