@@ -16,12 +16,17 @@ const props = defineProps<{
   overviewWidth: number;
 }>();
 const emit = defineEmits<{ open: [side: Side]; copy: [side: Side]; paste: [] }>();
+const INLINE_MENU_ENTER = 460;
+const INLINE_MENU_EXIT = 476;
 const root = ref<HTMLElement>();
 const openMenu = ref<Side | null>(null);
+const narrowInline = ref(false);
 const triggerA = ref<HTMLButtonElement>();
 const triggerB = ref<HTMLButtonElement>();
+let headerObserver: ResizeObserver | undefined;
 useResponsiveChrome(root);
 
+const showInlineMenus = computed(() => props.inline && narrowInline.value);
 const headerStyle = computed(() => {
   if (props.inline) return undefined;
   return {
@@ -29,6 +34,12 @@ const headerStyle = computed(() => {
     '--overview-width': `${ props.overviewWidth }px`,
   };
 });
+
+function updateNarrowInline() {
+  const width = root.value?.getBoundingClientRect().width ?? 0;
+  if (!width) return;
+  narrowInline.value = narrowInline.value ? width < INLINE_MENU_EXIT : width < INLINE_MENU_ENTER;
+}
 
 function setTriggerRef(side: Side, el: unknown) {
   const button = el instanceof HTMLButtonElement ? el : undefined;
@@ -63,13 +74,17 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 }
 
-watch(() => props.inline, () => closeMenu());
+watch([() => props.inline, showInlineMenus], () => closeMenu());
 
 onMounted(() => {
+  headerObserver = new ResizeObserver(updateNarrowInline);
+  if (root.value) headerObserver.observe(root.value);
+  updateNarrowInline();
   document.addEventListener('pointerdown', handleDocumentPointerDown);
   document.addEventListener('keydown', handleDocumentKeydown);
 });
 onBeforeUnmount(() => {
+  headerObserver?.disconnect();
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
   document.removeEventListener('keydown', handleDocumentKeydown);
 });
@@ -79,10 +94,10 @@ onBeforeUnmount(() => {
   <div
     ref="root"
     class="pane-headers"
-    :class="{ 'inline-headers': inline }"
+    :class="{ 'inline-headers': inline, 'inline-menus-mode': showInlineMenus }"
     :style="headerStyle"
   >
-    <template v-if="!inline">
+    <template v-if="!showInlineMenus">
       <div v-for="side in (['a', 'b'] as const)" :key="side" class="pane-heading">
         <div class="pane-info">
           <h2>{{ messages[locale][side === 'a' ? 'original' : 'modified'] }}</h2>
@@ -97,6 +112,15 @@ onBeforeUnmount(() => {
             @click="emit('open', side)"
           >
             <FileInput :size="14" /><span class="control-label">{{ messages[locale].open }}</span>
+          </button>
+          <button
+            v-if="inline && side === 'a'"
+            :disabled="!ready"
+            :title="messages[locale].paste"
+            :aria-label="messages[locale].paste"
+            @click="emit('paste')"
+          >
+            <ClipboardPaste :size="14" /><span class="control-label">{{ messages[locale].paste }}</span>
           </button>
           <button
             :disabled="!ready || !texts[side]"

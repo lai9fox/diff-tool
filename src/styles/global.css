@@ -13,15 +13,17 @@
   --accent-soft: #edf2ff;
   --selection: #dce6fa;
   --active-line: #f1f5fb;
-  --add: #177553;
-  --add-bg: #eff8f2;
-  --add-mark: #c8ead5;
-  --remove: #b14158;
-  --remove-bg: #fdf1f3;
-  --remove-mark: #f5ccd5;
-  --clear-bg: #f8e1e7;
-  --clear-border: #e6b8c3;
-  --clear-hover: #f2cdd7;
+  --add: #16794b;
+  --add-bg: #daf5e2;
+  --add-gutter: #c5eed1;
+  --add-mark: #9fe4b5;
+  --remove: #c23642;
+  --remove-bg: #fde4e4;
+  --remove-gutter: #fbd0d0;
+  --remove-mark: #f8b4b6;
+  --clear-bg: #fce7e8;
+  --clear-border: #eabdc0;
+  --clear-hover: #f7d4d6;
   --drop-bg: rgb(237 242 255 / 78%);
   --drop-idle-bg: rgb(247 249 252 / 78%);
   --overview-viewport: rgb(83 95 112 / 8%);
@@ -56,15 +58,17 @@
   --accent-soft: #2c3857;
   --selection: #384a70;
   --active-line: #293343;
-  --add: #75cfab;
-  --add-bg: #213732;
-  --add-mark: #2f614d;
-  --remove: #f29db0;
-  --remove-bg: #3b2835;
-  --remove-mark: #6f394c;
-  --clear-bg: #4c303c;
-  --clear-border: #714052;
-  --clear-hover: #5b3645;
+  --add: #56d384;
+  --add-bg: #1f4232;
+  --add-gutter: #23513a;
+  --add-mark: #2c734c;
+  --remove: #f87171;
+  --remove-bg: #4b262c;
+  --remove-gutter: #5d2b32;
+  --remove-mark: #88343d;
+  --clear-bg: #4a272d;
+  --clear-border: #733a42;
+  --clear-hover: #5b2f37;
   --drop-bg: rgb(44 56 87 / 78%);
   --drop-idle-bg: rgb(37 45 58 / 78%);
   --overview-viewport: rgb(176 188 205 / 9%);
@@ -321,6 +325,7 @@ svg {
   min-width: 0;
   height: 44px;
   padding: 0 12px;
+  overflow: hidden;
 }
 
 .pane-heading + .pane-heading {
@@ -372,7 +377,6 @@ svg {
 
 .pane-heading[data-density='snug'] {
   gap: 6px;
-  padding: 0 8px;
 }
 
 .pane-heading[data-density='snug'] .pane-actions {
@@ -381,7 +385,6 @@ svg {
 
 .pane-heading[data-density='compact'] {
   gap: 4px;
-  padding: 0 8px;
 }
 
 .pane-heading[data-density='compact'] .control-label {
@@ -397,6 +400,10 @@ svg {
 }
 
 .inline-headers {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.inline-menus-mode {
   display: block;
 }
 
@@ -515,10 +522,45 @@ svg {
   min-height: 0;
 }
 
+.diff-editor-shell,
 .monaco-host {
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+.split-sash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 15;
+  width: 9px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.split-sash::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background-color 0.14s ease;
+}
+
+.split-sash:hover::after,
+.split-sash.dragging::after {
+  background: var(--accent);
+}
+
+:root.resizing-split,
+:root.resizing-split * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .monaco-host .monaco-diff-editor.side-by-side .editor.original {
@@ -552,6 +594,15 @@ svg {
 .monaco-host .monaco-editor .insert-sign,
 .monaco-host .monaco-editor .delete-sign {
   justify-content: center;
+  opacity: 0.92 !important;
+}
+
+.monaco-host .monaco-editor .insert-sign {
+  color: var(--add);
+}
+
+.monaco-host .monaco-editor .delete-sign {
+  color: var(--remove);
 }
 
 .monaco-host .monaco-editor .diff-hidden-lines .center {

@@ -15,8 +15,13 @@ const emit = defineEmits<{
   splitLayout: [layout: { left: number; overview: number }];
   ready: []; error: [];
 }>();
+const MIN_SPLIT_PANE_WIDTH = 180;
 const host = ref<HTMLElement>();
 const loading = ref(true);
+const isSideBySide = ref(false);
+const splitLeft = ref(0);
+const overviewWidth = ref(30);
+const dragging = ref(false);
 let monaco: typeof import('../lib/monaco').monaco;
 let diffEditor: editor.IStandaloneDiffEditor | undefined;
 let models: Record<Side, editor.ITextModel>;
@@ -24,11 +29,24 @@ let decorations: Record<Side, editor.IEditorDecorationsCollection>;
 const subscriptions: IDisposable[] = [];
 let disposed = false;
 let navigating = false;
+let splitRatio = 0.5;
+let lastGlyphMargin: boolean | null = null;
+let dragStartX = 0;
+let dragStartLeft = 0;
 
 const child = (side: Side) => (side === 'a' ? diffEditor?.getOriginalEditor() : diffEditor?.getModifiedEditor());
+function clampSplitRatio(targetLeft: number, hostWidth: number, overview: number) {
+  const contentWidth = hostWidth - overview;
+  if (contentWidth <= 0) return 0.5;
+  const minRatio = Math.max(0.1, MIN_SPLIT_PANE_WIDTH / contentWidth);
+  const maxRatio = Math.min(0.9, (contentWidth - MIN_SPLIT_PANE_WIDTH) / contentWidth);
+  if (minRatio >= maxRatio) return 0.5;
+  return Math.min(maxRatio, Math.max(minRatio, targetLeft / contentWidth));
+}
 function options(): editor.IDiffEditorOptions {
   return {
     renderSideBySide: props.layout === 'split',
+    splitViewDefaultRatio: splitRatio,
     wordWrap: props.wrap ? 'on' : 'off', diffWordWrap: props.wrap ? 'on' : 'off',
     ignoreTrimWhitespace: props.ignoreWhitespace,
     hideUnchangedRegions: { enabled: props.collapse, contextLineCount: 3, minimumLineCount: 4, revealLineCount: 20 },
@@ -60,14 +78,63 @@ function emitSplitLayout() {
   const mod = child('b')?.getLayoutInfo();
   if (!orig || !mod) return;
   const sideBySide = !!host.value.querySelector('.monaco-diff-editor.side-by-side');
+  isSideBySide.value = sideBySide;
+  if (lastGlyphMargin !== sideBySide) {
+    lastGlyphMargin = sideBySide;
+    child('b')?.updateOptions({ glyphMargin: sideBySide });
+  }
   const hostWidth = host.value.clientWidth;
   if (sideBySide) {
-    const overview = Math.max(0, hostWidth - orig.width - mod.width);
-    emit('splitLayout', { left: orig.width, overview: overview <= 48 ? overview : 30 });
+    const rawOverview = Math.max(0, hostWidth - orig.width - mod.width);
+    const overview = rawOverview <= 48 ? rawOverview : 30;
+    const clamped = clampSplitRatio(splitRatio * (hostWidth - overview), hostWidth, overview);
+    if (Math.abs(clamped - splitRatio) > 0.001) {
+      splitRatio = clamped;
+      diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
+      return;
+    }
+    splitLeft.value = orig.width;
+    overviewWidth.value = overview;
+    emit('splitLayout', { left: orig.width, overview });
   } else {
-    const overview = Math.max(0, hostWidth - mod.width);
-    emit('splitLayout', { left: 0, overview: overview <= 48 ? overview : 30 });
+    const rawOverview = Math.max(0, hostWidth - mod.width);
+    const overview = rawOverview <= 48 ? rawOverview : 30;
+    splitLeft.value = 0;
+    overviewWidth.value = overview;
+    emit('splitLayout', { left: 0, overview });
   }
+}
+function startResize(event: PointerEvent) {
+  if (event.button !== 0 || !host.value || !diffEditor || !isSideBySide.value) return;
+  event.preventDefault();
+  dragging.value = true;
+  dragStartX = event.clientX;
+  dragStartLeft = splitLeft.value;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  document.documentElement.classList.add('resizing-split');
+}
+function moveResize(event: PointerEvent) {
+  if (!dragging.value || !host.value || !diffEditor) return;
+  const hostWidth = host.value.clientWidth;
+  const nextRatio = clampSplitRatio(dragStartLeft + (event.clientX - dragStartX), hostWidth, overviewWidth.value);
+  if (Math.abs(nextRatio - splitRatio) > 0.0005) {
+    splitRatio = nextRatio;
+    diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
+  }
+}
+function endResize(event?: PointerEvent) {
+  if (!dragging.value) return;
+  dragging.value = false;
+  document.documentElement.classList.remove('resizing-split');
+  if (event) {
+    const target = event.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+  }
+}
+function resetResize() {
+  if (!diffEditor || !isSideBySide.value) return;
+  splitRatio = 0.5;
+  diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
 }
 function setText(side: Side, text: string) {
   const model = models?.[side];
@@ -105,7 +172,8 @@ onMounted(async () => {
     diffEditor = monaco.editor.createDiffEditor(host.value, {
       ...options(), automaticLayout: true, originalEditable: true,
       useInlineViewWhenSpaceIsLimited: true, renderSideBySideInlineBreakpoint: 820,
-      enableSplitViewResizing: true, splitViewDefaultRatio: 0.5, diffAlgorithm: 'advanced',
+      enableSplitViewResizing: false, splitViewDefaultRatio: splitRatio, diffAlgorithm: 'advanced',
+      glyphMargin: props.layout === 'split',
       renderIndicators: true, renderMarginRevertIcon: false, renderGutterMenu: false, renderOverviewRuler: true,
       lineNumbersMinChars: 4, lineDecorationsWidth: 16,
       scrollbar: {
@@ -151,6 +219,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   disposed = true;
+  endResize();
   subscriptions.forEach(s => s.dispose());
   diffEditor?.dispose();
   models?.a.dispose();
@@ -159,9 +228,24 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="host" class="monaco-host" :aria-busy="loading">
-    <div v-if="loading" class="editor-skeleton" role="status">
-      {{ placeholder }}
+  <div class="diff-editor-shell">
+    <div ref="host" class="monaco-host" :aria-busy="loading">
+      <div v-if="loading" class="editor-skeleton" role="status">
+        {{ placeholder }}
+      </div>
     </div>
+    <div
+      v-if="isSideBySide && splitLeft > 0"
+      class="split-sash"
+      :class="{ dragging }"
+      :style="{ left: `${ splitLeft }px` }"
+      role="separator"
+      aria-orientation="vertical"
+      @pointerdown="startResize"
+      @pointermove="moveResize"
+      @pointerup="endResize"
+      @pointercancel="endResize"
+      @dblclick="resetResize"
+    />
   </div>
 </template>
