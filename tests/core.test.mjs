@@ -50,10 +50,12 @@ test('legacy comparison methods are ignored and other preferences survive', () =
   assert.equal(p.collapse, false);
 });
 
-test('theme colors expand short hex values and fall back for invalid values', () => {
+test('theme colors expand short hex values, keep alpha hex values, and fall back for invalid values', () => {
   assert.equal(normalizeColor('#fff'), '#ffffff');
   assert.equal(normalizeColor(' #aBc '), '#aabbcc');
+  assert.equal(normalizeColor('#2a4f'), '#22aa44ff');
   assert.equal(normalizeColor('#A1B2C3'), '#a1b2c3');
+  assert.equal(normalizeColor('#2DA44E29'), '#2da44e29');
   assert.equal(normalizeColor('no-color', '#123456'), '#123456');
   assert.equal(normalizeColor(''), '#000000');
 });

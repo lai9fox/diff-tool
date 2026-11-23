@@ -14,13 +14,11 @@
   --selection: #dce6fa;
   --active-line: #f1f5fb;
   --add: #16794b;
-  --add-bg: #daf5e2;
-  --add-gutter: #c5eed1;
-  --add-mark: #9fe4b5;
+  --add-bg: #2da44e29;
+  --add-mark: #2da44e33;
   --remove: #c23642;
-  --remove-bg: #fde4e4;
-  --remove-gutter: #fbd0d0;
-  --remove-mark: #f8b4b6;
+  --remove-bg: #e5484d26;
+  --remove-mark: #e5484d30;
   --clear-bg: #fce7e8;
   --clear-border: #eabdc0;
   --clear-hover: #f7d4d6;
@@ -59,13 +57,11 @@
   --selection: #384a70;
   --active-line: #293343;
   --add: #56d384;
-  --add-bg: #1f4232;
-  --add-gutter: #23513a;
-  --add-mark: #2c734c;
+  --add-bg: #2ea04338;
+  --add-mark: #2ea04347;
   --remove: #f87171;
-  --remove-bg: #4b262c;
-  --remove-gutter: #5d2b32;
-  --remove-mark: #88343d;
+  --remove-bg: #f8514930;
+  --remove-mark: #f8514942;
   --clear-bg: #4a272d;
   --clear-border: #733a42;
   --clear-hover: #5b2f37;
@@ -372,7 +368,9 @@ svg {
   min-height: 30px;
   padding: 0 8px;
   font-size: 12px;
-  transition: background-color 0.14s ease, color 0.14s ease;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
 }
 
 .pane-heading[data-density='snug'] {
@@ -471,7 +469,10 @@ svg {
   font-size: 12px;
   font-weight: 500;
   color: var(--secondary);
-  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .pane-menu-trigger.open {
@@ -605,6 +606,29 @@ svg {
   color: var(--remove);
 }
 
+.monaco-host
+  .monaco-editor
+  .view-overlays
+  .cdr.char-insert[style*='width:100%'],
+.monaco-host
+  .monaco-editor
+  .view-overlays
+  .cdr.char-delete[style*='width:100%'],
+.monaco-host .monaco-editor .view-line.char-delete,
+.monaco-host .monaco-editor .view-line > span > .char-delete:only-child,
+.monaco-host
+  .monaco-diff-editor:not(.side-by-side)
+  .editor.original
+  .margin-view-zones
+  .gutter-delete {
+  background-color: transparent;
+}
+
+.monaco-host .monaco-editor .char-insert:not(.diff-range-empty),
+.monaco-host .monaco-editor .char-delete:not(.diff-range-empty) {
+  border-radius: 3px;
+}
+
 .monaco-host .monaco-editor .diff-hidden-lines .center {
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -706,7 +730,10 @@ svg {
   color: var(--secondary);
   font-size: 13px;
   text-align: center;
-  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease,
+    color 0.14s ease;
 }
 
 .drop-card.active {
