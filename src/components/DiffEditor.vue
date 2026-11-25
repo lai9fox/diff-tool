@@ -91,6 +91,17 @@ function highlight() {
     }] : []);
   }
 }
+function syncOriginalWordWrap(sideBySide: boolean) {
+  const original = child('a');
+  if (!original || !monaco) return;
+  // Monaco sets wordWrapOverride2='off' on the hidden original editor in inline mode
+  // (including initial mount before layout width is measured) and never resets it
+  // back to 'inherit' when switching to side-by-side mode.
+  const target = sideBySide ? 'inherit' : 'off';
+  if (original.getOption(monaco.editor.EditorOption.wordWrapOverride2) !== target) {
+    original.updateOptions({ wordWrapOverride2: target });
+  }
+}
 function emitSplitLayout() {
   if (!host.value || !diffEditor) return;
   const orig = child('a')?.getLayoutInfo();
@@ -102,6 +113,7 @@ function emitSplitLayout() {
     lastGlyphMargin = sideBySide;
     child('b')?.updateOptions({ glyphMargin: sideBySide });
   }
+  syncOriginalWordWrap(sideBySide);
   const hostWidth = host.value.clientWidth;
   if (sideBySide) {
     const rawOverview = Math.max(0, hostWidth - orig.width - mod.width);
