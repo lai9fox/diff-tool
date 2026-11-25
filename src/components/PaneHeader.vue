@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, Check, ChevronDown, ClipboardPaste, Copy, FileInput } from '@lucide/vue';
+import { ArrowRight, Check, ChevronDown, Copy, FileInput } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { messages, type Locale } from '../lib/i18n';
 import type { Side } from '../lib/diff-stats';
@@ -15,7 +15,7 @@ const props = defineProps<{
   splitLeft: number;
   overviewWidth: number;
 }>();
-const emit = defineEmits<{ open: [side: Side]; copy: [side: Side]; paste: [] }>();
+const emit = defineEmits<{ open: [side: Side]; copy: [side: Side] }>();
 const INLINE_MENU_ENTER = 460;
 const INLINE_MENU_EXIT = 476;
 const root = ref<HTMLElement>();
@@ -28,7 +28,7 @@ useResponsiveChrome(root);
 
 const showInlineMenus = computed(() => props.inline && narrowInline.value);
 const headerStyle = computed(() => {
-  if (props.inline) return undefined;
+  if (showInlineMenus.value) return undefined;
   return {
     ...(props.splitLeft > 0 ? { '--split-left': `${ props.splitLeft }px` } : {}),
     '--overview-width': `${ props.overviewWidth }px`,
@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
   <div
     ref="root"
     class="pane-headers"
-    :class="{ 'inline-headers': inline, 'inline-menus-mode': showInlineMenus }"
+    :class="{ 'inline-menus-mode': showInlineMenus }"
     :style="headerStyle"
   >
     <template v-if="!showInlineMenus">
@@ -112,15 +112,6 @@ onBeforeUnmount(() => {
             @click="emit('open', side)"
           >
             <FileInput :size="14" /><span class="control-label">{{ messages[locale].open }}</span>
-          </button>
-          <button
-            v-if="inline && side === 'a'"
-            :disabled="!ready"
-            :title="messages[locale].paste"
-            :aria-label="messages[locale].paste"
-            @click="emit('paste')"
-          >
-            <ClipboardPaste :size="14" /><span class="control-label">{{ messages[locale].paste }}</span>
           </button>
           <button
             :disabled="!ready || !texts[side]"
@@ -178,16 +169,6 @@ onBeforeUnmount(() => {
               @click="runAction(() => emit('open', side))"
             >
               <FileInput :size="14" /><span>{{ messages[locale].open }}</span>
-            </button>
-            <button
-              v-if="side === 'a'"
-              type="button"
-              class="pane-menu-item"
-              role="menuitem"
-              :disabled="!ready"
-              @click="runAction(() => emit('paste'))"
-            >
-              <ClipboardPaste :size="14" /><span>{{ messages[locale].paste }}</span>
             </button>
             <button
               type="button"

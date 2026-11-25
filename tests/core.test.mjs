@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { lineStats, findChunkIndex, hasCollapsibleRegions, nextUnchangedCollapseState } from '../src/lib/diff-stats.ts';
-import { parsePreferences } from '../src/lib/preferences.ts';
+import {
+  nextSpaceLimited,
+  parsePreferences,
+  resolveEffectiveLayout,
+  SIDEBAR_DRAWER_BREAKPOINT,
+  SPLIT_MIN_WIDTH_ENTER,
+  SPLIT_MIN_WIDTH_EXIT,
+} from '../src/lib/preferences.ts';
 import { normalizeColor } from '../src/lib/monaco-theme.ts';
 
 const change = (a, endA, b, endB) => ({ originalStartLineNumber: a, originalEndLineNumber: endA, modifiedStartLineNumber: b, modifiedEndLineNumber: endB });
@@ -103,4 +110,21 @@ test('unchanged collapse state preserves manual expansions across diff updates w
     nextUnchangedCollapseState({ ...base, originalLineCount: 1, modifiedLineCount: 1, changes: [], shouldCollapseNextDiff: false, hadCollapsibleRegions: true }),
     { shouldCollapse: false, hadCollapsibleRegions: false },
   );
+});
+
+test('responsive layout enters and exits auto-inline with hysteresis while preserving preferred layout', () => {
+  assert.equal(nextSpaceLimited(0, false), false);
+  assert.equal(nextSpaceLimited(0, true), true);
+  assert.equal(nextSpaceLimited(SPLIT_MIN_WIDTH_ENTER, false), false);
+  assert.equal(nextSpaceLimited(SPLIT_MIN_WIDTH_ENTER - 1, false), true);
+  assert.equal(nextSpaceLimited(SPLIT_MIN_WIDTH_EXIT - 1, true), true);
+  assert.equal(nextSpaceLimited(SPLIT_MIN_WIDTH_EXIT, true), false);
+
+  assert.equal(resolveEffectiveLayout('split', false), 'split');
+  assert.equal(resolveEffectiveLayout('split', true), 'inline');
+  assert.equal(resolveEffectiveLayout('inline', false), 'inline');
+  assert.equal(resolveEffectiveLayout('inline', true), 'inline');
+
+  // Desktop workspace right above the drawer breakpoint still fits side-by-side (220px sidebar + 48px shell chrome + 2px border).
+  assert.equal(nextSpaceLimited(SIDEBAR_DRAWER_BREAKPOINT + 1 - 270, false), false);
 });

@@ -189,11 +189,23 @@ svg {
   padding: 0;
 }
 
+.layout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .layout-control {
   display: flex;
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.layout-option {
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 
 .layout-control button {
@@ -205,6 +217,14 @@ svg {
 .layout-control button[aria-pressed='true'] {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.layout-note {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .diff-summary {
@@ -309,7 +329,7 @@ svg {
   background: var(--surface);
 }
 
-.pane-headers:not(.inline-headers) {
+.pane-headers:not(.inline-menus-mode) {
   padding-right: var(--overview-width, 30px);
 }
 
@@ -395,10 +415,6 @@ svg {
 
 .pane-heading[data-density='compact'] .pane-stats {
   display: none;
-}
-
-.inline-headers {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .inline-menus-mode {
@@ -799,7 +815,7 @@ svg {
   }
 }
 
-@media (width <= 820px) {
+@media (width <= 920px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);

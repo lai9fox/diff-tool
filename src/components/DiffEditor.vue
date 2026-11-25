@@ -67,8 +67,14 @@ function collapseAllUnchanged() {
   if (typeof widget.collapseAllUnchangedRegions === 'function') {
     widget.collapseAllUnchangedRegions();
   } else {
-    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: false } });
-    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: true } });
+    diffEditor.updateOptions({
+      hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: false },
+      splitViewDefaultRatio: splitRatio,
+    });
+    diffEditor.updateOptions({
+      hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: true },
+      splitViewDefaultRatio: splitRatio,
+    });
   }
 }
 function updateLabels() {
@@ -102,6 +108,10 @@ function syncOriginalWordWrap(sideBySide: boolean) {
     original.updateOptions({ wordWrapOverride2: target });
   }
 }
+function readOverviewWidth() {
+  const overviewEl = host.value?.querySelector<HTMLElement>('.diffOverview');
+  return overviewEl && overviewEl.offsetWidth > 0 ? overviewEl.offsetWidth : 30;
+}
 function emitSplitLayout() {
   if (!host.value || !diffEditor) return;
   const orig = child('a')?.getLayoutInfo();
@@ -115,24 +125,24 @@ function emitSplitLayout() {
   }
   syncOriginalWordWrap(sideBySide);
   const hostWidth = host.value.clientWidth;
+  if (hostWidth <= 0) return;
+  const overview = readOverviewWidth();
   if (sideBySide) {
-    const rawOverview = Math.max(0, hostWidth - orig.width - mod.width);
-    const overview = rawOverview <= 48 ? rawOverview : 30;
     const clamped = clampSplitRatio(splitRatio * (hostWidth - overview), hostWidth, overview);
     if (Math.abs(clamped - splitRatio) > 0.001) {
       splitRatio = clamped;
       diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
       return;
     }
-    splitLeft.value = orig.width;
+    const left = orig.width > 0 ? orig.width : Math.floor(Math.max(0, hostWidth - overview) * splitRatio);
+    splitLeft.value = left;
     overviewWidth.value = overview;
-    emit('splitLayout', { left: orig.width, overview });
+    emit('splitLayout', { left, overview });
   } else {
-    const rawOverview = Math.max(0, hostWidth - mod.width);
-    const overview = rawOverview <= 48 ? rawOverview : 30;
+    const left = Math.floor(Math.max(0, hostWidth - overview) / 2);
     splitLeft.value = 0;
     overviewWidth.value = overview;
-    emit('splitLayout', { left: 0, overview });
+    emit('splitLayout', { left, overview });
   }
 }
 function startResize(event: PointerEvent) {
@@ -205,7 +215,11 @@ watch(
     if (collapse !== prevCollapse) {
       changed.hideUnchangedRegions = { ...UNCHANGED_REGIONS, enabled: collapse };
     }
-    if (Object.keys(changed).length) diffEditor.updateOptions(changed);
+    if (Object.keys(changed).length) {
+      // Monaco's validateDiffEditorOptions falls back to 0.5 whenever splitViewDefaultRatio is omitted.
+      changed.splitViewDefaultRatio = splitRatio;
+      diffEditor.updateOptions(changed);
+    }
     if (collapse && !prevCollapse) {
       collapseAllUnchanged();
       shouldCollapseNextDiff = diffPending;
@@ -234,7 +248,7 @@ onMounted(async () => {
     applyTheme();
     diffEditor = monaco.editor.createDiffEditor(host.value, {
       ...options(), automaticLayout: true, originalEditable: true,
-      useInlineViewWhenSpaceIsLimited: true, renderSideBySideInlineBreakpoint: 820,
+      useInlineViewWhenSpaceIsLimited: false,
       enableSplitViewResizing: false, splitViewDefaultRatio: splitRatio, diffAlgorithm: 'advanced',
       glyphMargin: props.layout === 'split',
       renderIndicators: true, renderMarginRevertIcon: false, renderGutterMenu: false, renderOverviewRuler: true,

@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { ArrowDown, ArrowUp, Columns2, GitCompareArrows, Moon, Rows2, Sun, Trash2, Undo2, X } from '@lucide/vue';
 import { messages, type Locale } from '../lib/i18n';
 import type { Layout, Theme } from '../lib/preferences';
 import SwitchControl from './SwitchControl.vue';
 
-defineProps<{
-  locale: Locale; theme: Theme; status: string; count: number; current: number;
+const props = defineProps<{
+  locale: Locale; theme: Theme; effectiveLayout: Layout; spaceLimited: boolean;
+  status: string; count: number; current: number;
   busy: boolean; stats: { added: number; deleted: number }; isEmpty: boolean; cleared: boolean; ready: boolean;
 }>();
 const layout = defineModel<Layout>('layout', { required: true });
@@ -13,6 +15,13 @@ const wrap = defineModel<boolean>('wrap', { required: true });
 const collapse = defineModel<boolean>('collapse', { required: true });
 const ignoreWhitespace = defineModel<boolean>('ignoreWhitespace', { required: true });
 const emit = defineEmits<{ jump: [direction: number]; clear: []; close: []; selectLayout: []; toggleLocale: []; toggleTheme: [] }>();
+const splitHint = computed(() => messages[props.locale][layout.value === 'split' ? 'splitAutoInline' : 'splitUnavailable']);
+
+function selectLayout(mode: Layout) {
+  if (mode === 'split' && props.spaceLimited) return;
+  if (!props.spaceLimited) layout.value = mode;
+  emit('selectLayout');
+}
 </script>
 
 <template>
@@ -24,15 +33,26 @@ const emit = defineEmits<{ jump: [direction: number]; clear: []; close: []; sele
       <X :size="18" />
     </button>
   </div>
-  <div class="layout-control" role="group" :aria-label="messages[locale].layout">
-    <button
-      v-for="mode in (['split', 'inline'] as const)"
-      :key="mode"
-      :aria-pressed="layout === mode"
-      @click="layout = mode; emit('selectLayout')"
-    >
-      <Columns2 v-if="mode === 'split'" :size="16" /><Rows2 v-else :size="16" />{{ messages[locale][mode] }}
-    </button>
+  <div class="layout-section">
+    <div class="layout-control" role="group" :aria-label="messages[locale].layout">
+      <span
+        v-for="mode in (['split', 'inline'] as const)"
+        :key="mode"
+        class="layout-option"
+        :title="mode === 'split' && spaceLimited ? splitHint : undefined"
+      >
+        <button
+          :disabled="mode === 'split' && spaceLimited"
+          :aria-pressed="effectiveLayout === mode"
+          @click="selectLayout(mode)"
+        >
+          <Columns2 v-if="mode === 'split'" :size="16" /><Rows2 v-else :size="16" />{{ messages[locale][mode] }}
+        </button>
+      </span>
+    </div>
+    <p v-if="spaceLimited" class="layout-note" role="status">
+      {{ splitHint }}
+    </p>
   </div>
   <div class="comparison-options">
     <SwitchControl v-model="ignoreWhitespace" :label="messages[locale].whitespace" />

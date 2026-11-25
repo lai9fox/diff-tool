@@ -3,7 +3,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertCircle, ArrowDown, ArrowUp, FileInput, Menu, X } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
 import { findChunkIndex, lineStats, type LineChange, type Side } from '../lib/diff-stats';
-import { parsePreferences, type Layout, type Theme } from '../lib/preferences';
+import {
+  nextSpaceLimited,
+  parsePreferences,
+  resolveEffectiveLayout,
+  SIDEBAR_DRAWER_BREAKPOINT,
+  type Layout,
+  type Theme,
+} from '../lib/preferences';
 import DiffEditor from './DiffEditor.vue';
 import Sidebar from './Sidebar.vue';
 import PaneHeader from './PaneHeader.vue';
@@ -29,7 +36,7 @@ const dragSide = ref<Side | null>(null);
 const sidebar = ref<HTMLDialogElement>();
 const sidebarOpen = ref(false);
 const narrowScreen = ref(false);
-const inline = ref(false);
+const spaceLimited = ref(false);
 const splitLeft = ref(0);
 const overviewWidth = ref(30);
 const workspace = ref<HTMLElement>();
@@ -46,6 +53,8 @@ let explicitLocale = false;
 let explicitTheme = false;
 
 const t = (key: MessageKey) => messages[locale.value][key];
+const effectiveLayout = computed<Layout>(() => resolveEffectiveLayout(layout.value, spaceLimited.value));
+const inline = computed(() => effectiveLayout.value === 'inline');
 const count = computed(() => changes.value.length);
 const stats = computed(() => lineStats(changes.value));
 const isEmpty = computed(() => !texts.value.a && !texts.value.b);
@@ -131,16 +140,6 @@ async function copy(side: Side) {
     notice.value = 'copyError';
   }
 }
-async function paste() {
-  try {
-    const text = await navigator.clipboard.readText();
-    cleared.value = null;
-    filenames.value.a = '';
-    editor.value?.setText('a', text);
-  } catch {
-    notice.value = 'pasteError';
-  }
-}
 function openFile(side: Side) {
   (side === 'a' ? fileA.value : fileB.value)?.click();
 }
@@ -161,8 +160,8 @@ function picked(side: Side, event: Event) {
   readFile(side, input.files?.[0]);
   input.value = '';
 }
-const editorAreaStyle = computed(() => (inline.value ? undefined : {
-  ...(splitLeft.value > 0 ? { '--split-left': `${ splitLeft.value }px` } : {}),
+const editorAreaStyle = computed(() => ({
+  ...(!inline.value && splitLeft.value > 0 ? { '--split-left': `${ splitLeft.value }px` } : {}),
   '--overview-width': `${ overviewWidth.value }px`,
 }));
 function splitLayoutUpdated(value: { left: number; overview: number }) {
@@ -190,8 +189,8 @@ function dropped(event: DragEvent) {
 function preventWindowDrop(e: DragEvent) {
   if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
 }
-function updateInline() {
-  inline.value = layout.value === 'inline' || (workspace.value?.clientWidth ?? 0) < 820;
+function updateSpaceLimited() {
+  spaceLimited.value = nextSpaceLimited(workspace.value?.clientWidth ?? 0, spaceLimited.value);
 }
 function syncSidebar() {
   narrowScreen.value = sidebarMedia.matches;
@@ -220,7 +219,6 @@ function keydown(e: KeyboardEvent) {
 }
 watch([locale, theme, layout, wrap, collapse], savePreferences);
 watch([theme, locale], applyAppearance);
-watch(layout, updateInline);
 watch(ignoreWhitespace, () => {
   if (ready.value) busy.value = true;
 }, { flush: 'sync' });
@@ -245,9 +243,10 @@ onMounted(async () => {
   collapse.value = p.collapse;
   applyAppearance();
   themeMedia.addEventListener('change', systemThemeChanged);
-  sidebarMedia = window.matchMedia('(max-width: 820px)');
+  sidebarMedia = window.matchMedia(`(max-width: ${ SIDEBAR_DRAWER_BREAKPOINT }px)`);
   sidebarMedia.addEventListener('change', syncSidebar);
   syncSidebar();
+  updateSpaceLimited();
   window.addEventListener('keydown', keydown);
   window.addEventListener('dragover', preventWindowDrop);
   window.addEventListener('drop', preventWindowDrop);
@@ -257,12 +256,12 @@ onMounted(async () => {
     if (!resizeFrame) {
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = 0;
-        updateInline();
+        updateSpaceLimited();
       });
     }
   });
   if (workspace.value) resizeObserver.observe(workspace.value);
-  updateInline();
+  updateSpaceLimited();
 });
 onBeforeUnmount(() => {
   themeMedia?.removeEventListener('change', systemThemeChanged);
@@ -317,6 +316,8 @@ onBeforeUnmount(() => {
         v-model:ignore-whitespace="ignoreWhitespace"
         :locale="locale"
         :theme="theme"
+        :effective-layout="effectiveLayout"
+        :space-limited="spaceLimited"
         :status="status"
         :count="count"
         :current="current"
@@ -345,7 +346,6 @@ onBeforeUnmount(() => {
         :overview-width="overviewWidth"
         @open="openFile"
         @copy="copy"
-        @paste="paste"
       />
       <div
         class="editor-area"
@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
         <DiffEditor
           v-if="initialized"
           ref="editor"
-          :layout="layout"
+          :layout="effectiveLayout"
           :wrap="wrap"
           :collapse="collapse"
           :ignore-whitespace="ignoreWhitespace"
