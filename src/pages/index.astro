@@ -1,6 +1,5 @@
 ---
 import Workbench from '../components/Workbench.vue';
-import 'overlayscrollbars/overlayscrollbars.css';
 import '../styles/global.css';
 ---
 
@@ -18,11 +17,20 @@ import '../styles/global.css';
     <link rel="canonical" href={Astro.site} />
     <title>Diff — 文本差异对比</title>
     <script is:inline>
+      let savedTheme;
       try {
-        const p = JSON.parse(localStorage.getItem('diff.preferences') || '{}');
-        document.documentElement.dataset.theme =
-          p.theme === 'dark' ? 'dark' : 'light';
+        savedTheme = JSON.parse(
+          localStorage.getItem('diff.preferences') || '{}',
+        )?.theme;
       } catch {}
+      const dark =
+        savedTheme === 'dark' ||
+        (savedTheme !== 'light' &&
+          matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document
+        .querySelector('meta[name="theme-color"]')
+        .setAttribute('content', dark ? '#171b22' : '#f5f7fa');
     </script>
   </head>
   <body>

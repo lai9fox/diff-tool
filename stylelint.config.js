@@ -2,8 +2,8 @@ export default {
   extends: ['stylelint-config-standard'],
   ignoreFiles: ['dist/**', '.astro/**', '.wrangler/**', 'node_modules/**'],
   rules: {
-    // CodeMirror owns its camelCase class names; application classes use kebab-case.
-    'selector-class-pattern': '^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*|cm-[a-zA-Z0-9-]+)$',
+    // Monaco owns its editor class names; application classes use kebab-case.
+    'selector-class-pattern': '^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*|monaco-[a-zA-Z0-9-]+|diffOverview|diffViewport)$',
   },
   overrides: [
     {

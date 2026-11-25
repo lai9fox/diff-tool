@@ -17,7 +17,6 @@ const checked = defineModel<boolean>({ required: true });
     :aria-label="accessibleLabel || label"
     @click="checked = !checked"
   >
-    <span class="switch-icon" aria-hidden="true"><slot /></span>
     <span class="switch-label">{{ label }}</span>
     <span class="switch-track" aria-hidden="true"><span class="switch-thumb" /></span>
     <span v-if="tooltip" class="switch-tooltip" aria-hidden="true">{{ tooltip }}</span>
@@ -27,17 +26,12 @@ const checked = defineModel<boolean>({ required: true });
 <style scoped>
 .switch-control {
   position: relative;
+  justify-content: space-between;
+  padding: 0;
+  gap: 8px;
   width: 100%;
   min-height: 40px;
   color: var(--secondary);
-}
-
-.switch-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .switch-label {
@@ -51,6 +45,7 @@ const checked = defineModel<boolean>({ required: true });
 .switch-track {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   width: 30px;
   height: 18px;
   padding: 2px;
