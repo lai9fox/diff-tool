@@ -221,7 +221,7 @@ onMounted(async () => {
       scrollbar: {
         verticalScrollbarSize: 8, horizontalScrollbarSize: 8,
         verticalSliderSize: 6, horizontalSliderSize: 6,
-        useShadows: false,
+        useShadows: false, ignoreHorizontalScrollbarInContentHeight: true,
       },
       minimap: { enabled: false }, fontFamily: '\'JetBrains Mono\', \'PingFang SC\', \'Microsoft YaHei\', monospace',
       fontSize: 14, lineHeight: 22, padding: { top: 8, bottom: 8 }, scrollBeyondLastLine: false,
