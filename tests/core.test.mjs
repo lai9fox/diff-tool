@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lineStats, findChunkIndex, hasCollapsibleRegions } from '../src/lib/diff-stats.ts';
+import { lineStats, findChunkIndex, hasCollapsibleRegions, nextUnchangedCollapseState } from '../src/lib/diff-stats.ts';
 import { parsePreferences } from '../src/lib/preferences.ts';
 import { normalizeColor } from '../src/lib/monaco-theme.ts';
 
@@ -69,4 +69,38 @@ test('collapsible region detection matches Monaco edge and middle thresholds', (
   assert.equal(hasCollapsibleRegions([change(1, 1, 1, 1), change(12, 12, 12, 12)], 12, 12, 3, 4), true);
   assert.equal(hasCollapsibleRegions([change(0, 0, 1, 2), change(9, 9, 11, 11)], 9, 11, 3, 4), false);
   assert.equal(hasCollapsibleRegions([change(1, 2, 0, 0)], 9, 7, 3, 4), true);
+});
+
+test('unchanged collapse state preserves manual expansions across diff updates while collapsing initial regions', () => {
+  const base = {
+    collapse: true,
+    originalLineCount: 40,
+    modifiedLineCount: 40,
+    contextLineCount: 3,
+    minimumLineCount: 4,
+  };
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, changes: [change(1, 1, 1, 1)], shouldCollapseNextDiff: false, hadCollapsibleRegions: false }),
+    { shouldCollapse: true, hadCollapsibleRegions: true },
+  );
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, changes: [change(1, 1, 1, 1)], shouldCollapseNextDiff: false, hadCollapsibleRegions: true }),
+    { shouldCollapse: false, hadCollapsibleRegions: true },
+  );
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, changes: [], shouldCollapseNextDiff: false, hadCollapsibleRegions: true }),
+    { shouldCollapse: false, hadCollapsibleRegions: true },
+  );
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, changes: [], shouldCollapseNextDiff: false, hadCollapsibleRegions: false }),
+    { shouldCollapse: false, hadCollapsibleRegions: false },
+  );
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, changes: [change(1, 1, 1, 1)], shouldCollapseNextDiff: true, hadCollapsibleRegions: true }),
+    { shouldCollapse: true, hadCollapsibleRegions: true },
+  );
+  assert.deepEqual(
+    nextUnchangedCollapseState({ ...base, originalLineCount: 1, modifiedLineCount: 1, changes: [], shouldCollapseNextDiff: false, hadCollapsibleRegions: true }),
+    { shouldCollapse: false, hadCollapsibleRegions: false },
+  );
 });

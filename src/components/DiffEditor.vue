@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { editor, IDisposable } from 'monaco-editor/editor/editor.api.js';
-import { hasCollapsibleRegions, type Side, type LineChange } from '../lib/diff-stats';
+import { hasCollapsibleRegions, nextUnchangedCollapseState, type Side, type LineChange } from '../lib/diff-stats';
 import type { Layout, Theme } from '../lib/preferences';
 import { monacoTheme } from '../lib/monaco-theme';
 
@@ -178,13 +178,22 @@ function goTo(index: number) {
 defineExpose({ setText, goTo, focus: (side: Side) => child(side)?.focus() });
 watch(
   () => [props.layout, props.wrap, props.collapse, props.ignoreWhitespace] as const,
-  ([, , collapse, ignoreWhitespace], [, , prevCollapse, prevIgnoreWhitespace]) => {
+  ([layout, wrap, collapse, ignoreWhitespace], [prevLayout, prevWrap, prevCollapse, prevIgnoreWhitespace]) => {
     if (!diffEditor) return;
+    const changed: editor.IDiffEditorOptions = {};
+    if (layout !== prevLayout) changed.renderSideBySide = layout === 'split';
+    if (wrap !== prevWrap) {
+      changed.wordWrap = wrap ? 'on' : 'off';
+      changed.diffWordWrap = wrap ? 'on' : 'off';
+    }
     if (ignoreWhitespace !== prevIgnoreWhitespace) {
       diffPending = true;
-      shouldCollapseNextDiff = true;
+      changed.ignoreTrimWhitespace = ignoreWhitespace;
     }
-    diffEditor.updateOptions(options());
+    if (collapse !== prevCollapse) {
+      changed.hideUnchangedRegions = { ...UNCHANGED_REGIONS, enabled: collapse };
+    }
+    if (Object.keys(changed).length) diffEditor.updateOptions(changed);
     if (collapse && !prevCollapse) {
       collapseAllUnchanged();
       shouldCollapseNextDiff = diffPending;
@@ -250,18 +259,21 @@ onMounted(async () => {
     subscriptions.push(diffEditor.onDidUpdateDiff(() => {
       diffPending = false;
       const changes = diffEditor!.getLineChanges() ?? [];
-      const hasCollapsible = hasCollapsibleRegions(
+      const nextState = nextUnchangedCollapseState({
+        collapse: props.collapse,
         changes,
-        models.a.getLineCount(),
-        models.b.getLineCount(),
-        UNCHANGED_REGIONS.contextLineCount,
-        UNCHANGED_REGIONS.minimumLineCount,
-      );
-      if (props.collapse && hasCollapsible && (shouldCollapseNextDiff || !hadCollapsibleRegions)) {
+        originalLineCount: models.a.getLineCount(),
+        modifiedLineCount: models.b.getLineCount(),
+        contextLineCount: UNCHANGED_REGIONS.contextLineCount,
+        minimumLineCount: UNCHANGED_REGIONS.minimumLineCount,
+        shouldCollapseNextDiff,
+        hadCollapsibleRegions,
+      });
+      if (nextState.shouldCollapse) {
         collapseAllUnchanged();
       }
       shouldCollapseNextDiff = false;
-      hadCollapsibleRegions = props.collapse && hasCollapsible;
+      hadCollapsibleRegions = nextState.hadCollapsibleRegions;
       emit('diff', changes);
       highlight();
     }));

@@ -52,3 +52,31 @@ export function hasCollapsibleRegions(
     && modStart + tailLength === modifiedLineCount + 1
     && tailLength >= edgeThreshold;
 }
+
+export function nextUnchangedCollapseState(options: {
+  collapse: boolean;
+  changes: LineChange[];
+  originalLineCount: number;
+  modifiedLineCount: number;
+  contextLineCount: number;
+  minimumLineCount: number;
+  shouldCollapseNextDiff: boolean;
+  hadCollapsibleRegions: boolean;
+}) {
+  const hasCollapsible = hasCollapsibleRegions(
+    options.changes,
+    options.originalLineCount,
+    options.modifiedLineCount,
+    options.contextLineCount,
+    options.minimumLineCount,
+  );
+  const shouldCollapse = options.collapse && hasCollapsible && (options.shouldCollapseNextDiff || !options.hadCollapsibleRegions);
+  const preservesUnchangedState = options.hadCollapsibleRegions
+    && !options.changes.length
+    && options.originalLineCount === options.modifiedLineCount
+    && options.originalLineCount >= options.contextLineCount + options.minimumLineCount;
+  return {
+    shouldCollapse,
+    hadCollapsibleRegions: options.collapse && (hasCollapsible || preservesUnchangedState),
+  };
+}
