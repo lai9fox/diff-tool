@@ -30,7 +30,12 @@ function selectLayout(mode: Layout) {
       <X :size="18" />
     </button>
   </div>
-  <div class="layout-control" role="group" :aria-label="messages[locale].layout">
+  <div
+    class="layout-control"
+    :data-layout="layout"
+    role="group"
+    :aria-label="messages[locale].layout"
+  >
     <button
       v-for="mode in (['split', 'inline'] as const)"
       :key="mode"
