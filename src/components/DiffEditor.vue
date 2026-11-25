@@ -18,16 +18,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   change: [side: Side, text: string]; diff: [changes: LineChange[]];
   cursor: [side: Side, lineNumber: number]; jump: [direction: number];
-  splitLayout: [layout: { left: number; overview: number }];
   ready: []; error: [];
 }>();
-const MIN_SPLIT_PANE_WIDTH = 180;
 const host = ref<HTMLElement>();
 const loading = ref(true);
-const isSideBySide = ref(false);
-const splitLeft = ref(0);
-const overviewWidth = ref(30);
-const dragging = ref(false);
 let monaco: typeof import('../lib/monaco').monaco;
 let diffEditor: editor.IStandaloneDiffEditor | undefined;
 let models: Record<Side, editor.ITextModel>;
@@ -38,25 +32,16 @@ let navigating = false;
 let diffPending = false;
 let shouldCollapseNextDiff = false;
 let hadCollapsibleRegions = false;
-let splitRatio = 0.5;
-let lastGlyphMargin: boolean | null = null;
-let dragStartX = 0;
-let dragStartLeft = 0;
 
 const child = (side: Side) => (side === 'a' ? diffEditor?.getOriginalEditor() : diffEditor?.getModifiedEditor());
-function clampSplitRatio(targetLeft: number, hostWidth: number, overview: number) {
-  const contentWidth = hostWidth - overview;
-  if (contentWidth <= 0) return 0.5;
-  const minRatio = Math.max(0.1, MIN_SPLIT_PANE_WIDTH / contentWidth);
-  const maxRatio = Math.min(0.9, (contentWidth - MIN_SPLIT_PANE_WIDTH) / contentWidth);
-  if (minRatio >= maxRatio) return 0.5;
-  return Math.min(maxRatio, Math.max(minRatio, targetLeft / contentWidth));
-}
 function options(): editor.IDiffEditorOptions {
+  const split = props.layout === 'split';
   return {
-    renderSideBySide: props.layout === 'split',
-    splitViewDefaultRatio: splitRatio,
-    wordWrap: props.wrap ? 'on' : 'off', diffWordWrap: props.wrap ? 'on' : 'off',
+    renderSideBySide: split,
+    readOnly: !split,
+    originalEditable: split,
+    wordWrap: props.wrap ? 'on' : 'off',
+    diffWordWrap: props.wrap ? 'on' : 'off',
     ignoreTrimWhitespace: props.ignoreWhitespace,
     hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: props.collapse },
   };
@@ -67,14 +52,8 @@ function collapseAllUnchanged() {
   if (typeof widget.collapseAllUnchangedRegions === 'function') {
     widget.collapseAllUnchangedRegions();
   } else {
-    diffEditor.updateOptions({
-      hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: false },
-      splitViewDefaultRatio: splitRatio,
-    });
-    diffEditor.updateOptions({
-      hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: true },
-      splitViewDefaultRatio: splitRatio,
-    });
+    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: false } });
+    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: true } });
   }
 }
 function updateLabels() {
@@ -97,85 +76,15 @@ function highlight() {
     }] : []);
   }
 }
-function syncOriginalWordWrap(sideBySide: boolean) {
+function syncOriginalWordWrap() {
   const original = child('a');
   if (!original || !monaco) return;
   // Monaco sets wordWrapOverride2='off' on the hidden original editor in inline mode
-  // (including initial mount before layout width is measured) and never resets it
-  // back to 'inherit' when switching to side-by-side mode.
-  const target = sideBySide ? 'inherit' : 'off';
+  // and never resets it back to 'inherit' when switching to side-by-side mode.
+  const target = props.layout === 'split' ? 'inherit' : 'off';
   if (original.getOption(monaco.editor.EditorOption.wordWrapOverride2) !== target) {
     original.updateOptions({ wordWrapOverride2: target });
   }
-}
-function readOverviewWidth() {
-  const overviewEl = host.value?.querySelector<HTMLElement>('.diffOverview');
-  return overviewEl && overviewEl.offsetWidth > 0 ? overviewEl.offsetWidth : 30;
-}
-function emitSplitLayout() {
-  if (!host.value || !diffEditor) return;
-  const orig = child('a')?.getLayoutInfo();
-  const mod = child('b')?.getLayoutInfo();
-  if (!orig || !mod) return;
-  const sideBySide = !!host.value.querySelector('.monaco-diff-editor.side-by-side');
-  isSideBySide.value = sideBySide;
-  if (lastGlyphMargin !== sideBySide) {
-    lastGlyphMargin = sideBySide;
-    child('b')?.updateOptions({ glyphMargin: sideBySide });
-  }
-  syncOriginalWordWrap(sideBySide);
-  const hostWidth = host.value.clientWidth;
-  if (hostWidth <= 0) return;
-  const overview = readOverviewWidth();
-  if (sideBySide) {
-    const clamped = clampSplitRatio(splitRatio * (hostWidth - overview), hostWidth, overview);
-    if (Math.abs(clamped - splitRatio) > 0.001) {
-      splitRatio = clamped;
-      diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
-      return;
-    }
-    const left = orig.width > 0 ? orig.width : Math.floor(Math.max(0, hostWidth - overview) * splitRatio);
-    splitLeft.value = left;
-    overviewWidth.value = overview;
-    emit('splitLayout', { left, overview });
-  } else {
-    const left = Math.floor(Math.max(0, hostWidth - overview) / 2);
-    splitLeft.value = 0;
-    overviewWidth.value = overview;
-    emit('splitLayout', { left, overview });
-  }
-}
-function startResize(event: PointerEvent) {
-  if (event.button !== 0 || !host.value || !diffEditor || !isSideBySide.value) return;
-  event.preventDefault();
-  dragging.value = true;
-  dragStartX = event.clientX;
-  dragStartLeft = splitLeft.value;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  document.documentElement.classList.add('resizing-split');
-}
-function moveResize(event: PointerEvent) {
-  if (!dragging.value || !host.value || !diffEditor) return;
-  const hostWidth = host.value.clientWidth;
-  const nextRatio = clampSplitRatio(dragStartLeft + (event.clientX - dragStartX), hostWidth, overviewWidth.value);
-  if (Math.abs(nextRatio - splitRatio) > 0.0005) {
-    splitRatio = nextRatio;
-    diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
-  }
-}
-function endResize(event?: PointerEvent) {
-  if (!dragging.value) return;
-  dragging.value = false;
-  document.documentElement.classList.remove('resizing-split');
-  if (event) {
-    const target = event.currentTarget as HTMLElement;
-    if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-  }
-}
-function resetResize() {
-  if (!diffEditor || !isSideBySide.value) return;
-  splitRatio = 0.5;
-  diffEditor.updateOptions({ splitViewDefaultRatio: splitRatio });
 }
 function setText(side: Side, text: string) {
   const model = models?.[side];
@@ -203,7 +112,12 @@ watch(
   ([layout, wrap, collapse, ignoreWhitespace], [prevLayout, prevWrap, prevCollapse, prevIgnoreWhitespace]) => {
     if (!diffEditor) return;
     const changed: editor.IDiffEditorOptions = {};
-    if (layout !== prevLayout) changed.renderSideBySide = layout === 'split';
+    if (layout !== prevLayout) {
+      const split = layout === 'split';
+      changed.renderSideBySide = split;
+      changed.readOnly = !split;
+      changed.originalEditable = split;
+    }
     if (wrap !== prevWrap) {
       changed.wordWrap = wrap ? 'on' : 'off';
       changed.diffWordWrap = wrap ? 'on' : 'off';
@@ -216,9 +130,11 @@ watch(
       changed.hideUnchangedRegions = { ...UNCHANGED_REGIONS, enabled: collapse };
     }
     if (Object.keys(changed).length) {
-      // Monaco's validateDiffEditorOptions falls back to 0.5 whenever splitViewDefaultRatio is omitted.
-      changed.splitViewDefaultRatio = splitRatio;
       diffEditor.updateOptions(changed);
+    }
+    if (layout !== prevLayout) {
+      child('b')?.updateOptions({ glyphMargin: layout === 'split' });
+      syncOriginalWordWrap();
     }
     if (collapse && !prevCollapse) {
       collapseAllUnchanged();
@@ -234,7 +150,6 @@ watch(
       shouldCollapseNextDiff = false;
       hadCollapsibleRegions = false;
     }
-    requestAnimationFrame(emitSplitLayout);
   },
 );
 watch(() => [props.placeholder, props.originalLabel, props.modifiedLabel], updateLabels);
@@ -247,9 +162,9 @@ onMounted(async () => {
     if (disposed || !host.value) return;
     applyTheme();
     diffEditor = monaco.editor.createDiffEditor(host.value, {
-      ...options(), automaticLayout: true, originalEditable: true,
+      ...options(), automaticLayout: true,
       useInlineViewWhenSpaceIsLimited: false,
-      enableSplitViewResizing: false, splitViewDefaultRatio: splitRatio, diffAlgorithm: 'advanced',
+      enableSplitViewResizing: false, diffAlgorithm: 'advanced',
       glyphMargin: props.layout === 'split',
       renderIndicators: true, renderMarginRevertIcon: false, renderGutterMenu: false, renderOverviewRuler: true,
       lineNumbersMinChars: 4, lineDecorationsWidth: 16,
@@ -276,12 +191,12 @@ onMounted(async () => {
       subscriptions.push(child(side)!.onDidChangeCursorPosition(e => {
         if (!navigating) emit('cursor', side, e.position.lineNumber);
       }));
-      subscriptions.push(child(side)!.onDidLayoutChange(emitSplitLayout));
       child(side)!.addCommand(monaco.KeyCode.F7, () => emit('jump', 1));
       child(side)!.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F7, () => emit('jump', -1));
       child(side)!.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.DownArrow, () => emit('jump', 1));
       child(side)!.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => emit('jump', -1));
     }
+    subscriptions.push(child('a')!.onDidLayoutChange(syncOriginalWordWrap));
     subscriptions.push(diffEditor.onDidUpdateDiff(() => {
       diffPending = false;
       const changes = diffEditor!.getLineChanges() ?? [];
@@ -305,7 +220,7 @@ onMounted(async () => {
     }));
     diffEditor.setModel({ original: models.a, modified: models.b });
     updateLabels();
-    emitSplitLayout();
+    syncOriginalWordWrap();
     loading.value = false;
     emit('ready');
     await document.fonts.ready;
@@ -316,7 +231,6 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   disposed = true;
-  endResize();
   subscriptions.forEach(s => s.dispose());
   diffEditor?.dispose();
   models?.a.dispose();
@@ -325,24 +239,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="diff-editor-shell">
-    <div ref="host" class="monaco-host" :aria-busy="loading">
-      <div v-if="loading" class="editor-skeleton" role="status">
-        {{ placeholder }}
-      </div>
+  <div ref="host" class="monaco-host" :aria-busy="loading">
+    <div v-if="loading" class="editor-skeleton" role="status">
+      {{ placeholder }}
     </div>
-    <div
-      v-if="isSideBySide && splitLeft > 0"
-      class="split-sash"
-      :class="{ dragging }"
-      :style="{ left: `${ splitLeft }px` }"
-      role="separator"
-      aria-orientation="vertical"
-      @pointerdown="startResize"
-      @pointermove="moveResize"
-      @pointerup="endResize"
-      @pointercancel="endResize"
-      @dblclick="resetResize"
-    />
   </div>
 </template>

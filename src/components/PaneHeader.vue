@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ArrowRight, Check, ChevronDown, Copy, FileInput } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { ArrowRight, Check, ChevronDown, Copy, FileInput, Pencil } from '@lucide/vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { messages, type Locale } from '../lib/i18n';
 import type { Side } from '../lib/diff-stats';
-import { useResponsiveChrome } from '../lib/responsive-chrome';
 
 const props = defineProps<{
   inline: boolean;
@@ -12,34 +11,12 @@ const props = defineProps<{
   filenames: Record<Side, string>;
   copied: Side | null;
   ready: boolean;
-  splitLeft: number;
-  overviewWidth: number;
 }>();
-const emit = defineEmits<{ open: [side: Side]; copy: [side: Side] }>();
-const INLINE_MENU_ENTER = 460;
-const INLINE_MENU_EXIT = 476;
+const emit = defineEmits<{ open: [side: Side]; copy: [side: Side]; edit: [] }>();
 const root = ref<HTMLElement>();
 const openMenu = ref<Side | null>(null);
-const narrowInline = ref(false);
 const triggerA = ref<HTMLButtonElement>();
 const triggerB = ref<HTMLButtonElement>();
-let headerObserver: ResizeObserver | undefined;
-useResponsiveChrome(root);
-
-const showInlineMenus = computed(() => props.inline && narrowInline.value);
-const headerStyle = computed(() => {
-  if (showInlineMenus.value) return undefined;
-  return {
-    ...(props.splitLeft > 0 ? { '--split-left': `${ props.splitLeft }px` } : {}),
-    '--overview-width': `${ props.overviewWidth }px`,
-  };
-});
-
-function updateNarrowInline() {
-  const width = root.value?.getBoundingClientRect().width ?? 0;
-  if (!width) return;
-  narrowInline.value = narrowInline.value ? width < INLINE_MENU_EXIT : width < INLINE_MENU_ENTER;
-}
 
 function setTriggerRef(side: Side, el: unknown) {
   const button = el instanceof HTMLButtonElement ? el : undefined;
@@ -74,17 +51,13 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 }
 
-watch([() => props.inline, showInlineMenus], () => closeMenu());
+watch(() => props.inline, () => closeMenu());
 
 onMounted(() => {
-  headerObserver = new ResizeObserver(updateNarrowInline);
-  if (root.value) headerObserver.observe(root.value);
-  updateNarrowInline();
   document.addEventListener('pointerdown', handleDocumentPointerDown);
   document.addEventListener('keydown', handleDocumentKeydown);
 });
 onBeforeUnmount(() => {
-  headerObserver?.disconnect();
   document.removeEventListener('pointerdown', handleDocumentPointerDown);
   document.removeEventListener('keydown', handleDocumentKeydown);
 });
@@ -94,10 +67,9 @@ onBeforeUnmount(() => {
   <div
     ref="root"
     class="pane-headers"
-    :class="{ 'inline-menus-mode': showInlineMenus }"
-    :style="headerStyle"
+    :class="{ 'inline-mode': inline }"
   >
-    <template v-if="!showInlineMenus">
+    <template v-if="!inline">
       <div v-for="side in (['a', 'b'] as const)" :key="side" class="pane-heading">
         <div class="pane-info">
           <h2>{{ messages[locale][side === 'a' ? 'original' : 'modified'] }}</h2>
@@ -136,6 +108,7 @@ onBeforeUnmount(() => {
           <span class="inline-side-title">{{ messages[locale].modified }}</span>
           <span v-if="filenames.b" class="inline-file-name" :title="filenames.b">{{ filenames.b }}</span>
         </span>
+        <span class="readonly-badge">{{ messages[locale].readonly }}</span>
       </div>
 
       <div class="inline-menus">
@@ -181,6 +154,15 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+        <button
+          type="button"
+          class="inline-edit-button"
+          :title="messages[locale].backToEdit"
+          :aria-label="messages[locale].backToEdit"
+          @click="emit('edit')"
+        >
+          <Pencil :size="13" /><span>{{ messages[locale].edit }}</span>
+        </button>
       </div>
     </div>
   </div>

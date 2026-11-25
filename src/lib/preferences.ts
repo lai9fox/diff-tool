@@ -4,17 +4,6 @@ export type Theme = 'light' | 'dark';
 export type Layout = 'split' | 'inline';
 
 export const SIDEBAR_DRAWER_BREAKPOINT = 920;
-export const SPLIT_MIN_WIDTH_ENTER = 640;
-export const SPLIT_MIN_WIDTH_EXIT = 656;
-
-export function nextSpaceLimited(width: number, currentlyLimited: boolean) {
-  if (width <= 0) return currentlyLimited;
-  return currentlyLimited ? width < SPLIT_MIN_WIDTH_EXIT : width < SPLIT_MIN_WIDTH_ENTER;
-}
-
-export function resolveEffectiveLayout(preferred: Layout, spaceLimited: boolean): Layout {
-  return spaceLimited ? 'inline' : preferred;
-}
 
 export function parsePreferences(raw: string | null, language: string, dark: boolean) {
   let saved: Record<string, unknown> = {};

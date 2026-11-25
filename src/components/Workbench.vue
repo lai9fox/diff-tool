@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { AlertCircle, ArrowDown, ArrowUp, FileInput, Menu, X } from '@lucide/vue';
 import { messages, type Locale, type MessageKey } from '../lib/i18n';
 import { findChunkIndex, lineStats, type LineChange, type Side } from '../lib/diff-stats';
 import {
-  nextSpaceLimited,
   parsePreferences,
-  resolveEffectiveLayout,
   SIDEBAR_DRAWER_BREAKPOINT,
   type Layout,
   type Theme,
@@ -15,6 +13,8 @@ import DiffEditor from './DiffEditor.vue';
 import Sidebar from './Sidebar.vue';
 import PaneHeader from './PaneHeader.vue';
 import '@fontsource/jetbrains-mono/400.css';
+
+const OVERVIEW_RULER_WIDTH = 30;
 
 const locale = ref<Locale>('zh');
 const theme = ref<Theme>('light');
@@ -36,25 +36,19 @@ const dragSide = ref<Side | null>(null);
 const sidebar = ref<HTMLDialogElement>();
 const sidebarOpen = ref(false);
 const narrowScreen = ref(false);
-const spaceLimited = ref(false);
-const splitLeft = ref(0);
-const overviewWidth = ref(30);
-const workspace = ref<HTMLElement>();
 const editor = ref<InstanceType<typeof DiffEditor>>();
 const fileA = ref<HTMLInputElement>();
 const fileB = ref<HTMLInputElement>();
 let copiedTimer: ReturnType<typeof setTimeout>;
 let noticeTimer: ReturnType<typeof setTimeout>;
-let resizeFrame = 0;
-let resizeObserver: ResizeObserver | undefined;
 let sidebarMedia: MediaQueryList;
 let themeMedia: MediaQueryList;
 let explicitLocale = false;
 let explicitTheme = false;
 
 const t = (key: MessageKey) => messages[locale.value][key];
-const effectiveLayout = computed<Layout>(() => resolveEffectiveLayout(layout.value, spaceLimited.value));
-const inline = computed(() => effectiveLayout.value === 'inline');
+const inline = computed(() => layout.value === 'inline');
+const editorPlaceholder = computed(() => t(inline.value ? 'inlineEmptyHint' : 'emptyHint'));
 const count = computed(() => changes.value.length);
 const stats = computed(() => lineStats(changes.value));
 const isEmpty = computed(() => !texts.value.a && !texts.value.b);
@@ -160,17 +154,9 @@ function picked(side: Side, event: Event) {
   readFile(side, input.files?.[0]);
   input.value = '';
 }
-const editorAreaStyle = computed(() => ({
-  ...(!inline.value && splitLeft.value > 0 ? { '--split-left': `${ splitLeft.value }px` } : {}),
-  '--overview-width': `${ overviewWidth.value }px`,
-}));
-function splitLayoutUpdated(value: { left: number; overview: number }) {
-  splitLeft.value = value.left;
-  overviewWidth.value = value.overview;
-}
 function targetSide(event: DragEvent): Side {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const divider = !inline.value && splitLeft.value > 0 ? splitLeft.value : box.width / 2;
+  const divider = Math.max(0, box.width - OVERVIEW_RULER_WIDTH) / 2;
   return event.clientX < box.x + divider ? 'a' : 'b';
 }
 function dragover(event: DragEvent) {
@@ -188,9 +174,6 @@ function dropped(event: DragEvent) {
 }
 function preventWindowDrop(e: DragEvent) {
   if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
-}
-function updateSpaceLimited() {
-  spaceLimited.value = nextSpaceLimited(workspace.value?.clientWidth ?? 0, spaceLimited.value);
 }
 function syncSidebar() {
   narrowScreen.value = sidebarMedia.matches;
@@ -227,7 +210,7 @@ watch(notice, value => {
   clearTimeout(noticeTimer);
   if (value) noticeTimer = setTimeout(() => (notice.value = null), 5000);
 });
-onMounted(async () => {
+onMounted(() => {
   themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   let raw = null;
   try {
@@ -246,28 +229,14 @@ onMounted(async () => {
   sidebarMedia = window.matchMedia(`(max-width: ${ SIDEBAR_DRAWER_BREAKPOINT }px)`);
   sidebarMedia.addEventListener('change', syncSidebar);
   syncSidebar();
-  updateSpaceLimited();
   window.addEventListener('keydown', keydown);
   window.addEventListener('dragover', preventWindowDrop);
   window.addEventListener('drop', preventWindowDrop);
   initialized.value = true;
-  await nextTick();
-  resizeObserver = new ResizeObserver(() => {
-    if (!resizeFrame) {
-      resizeFrame = requestAnimationFrame(() => {
-        resizeFrame = 0;
-        updateSpaceLimited();
-      });
-    }
-  });
-  if (workspace.value) resizeObserver.observe(workspace.value);
-  updateSpaceLimited();
 });
 onBeforeUnmount(() => {
   themeMedia?.removeEventListener('change', systemThemeChanged);
   sidebarMedia?.removeEventListener('change', syncSidebar);
-  resizeObserver?.disconnect();
-  cancelAnimationFrame(resizeFrame);
   clearTimeout(copiedTimer);
   clearTimeout(noticeTimer);
   window.removeEventListener('keydown', keydown);
@@ -316,8 +285,6 @@ onBeforeUnmount(() => {
         v-model:ignore-whitespace="ignoreWhitespace"
         :locale="locale"
         :theme="theme"
-        :effective-layout="effectiveLayout"
-        :space-limited="spaceLimited"
         :status="status"
         :count="count"
         :current="current"
@@ -334,7 +301,7 @@ onBeforeUnmount(() => {
         @toggle-theme="toggleTheme"
       />
     </dialog>
-    <section ref="workspace" class="workspace" :aria-label="t('app')">
+    <section class="workspace" :aria-label="t('app')">
       <PaneHeader
         :inline="inline"
         :locale="locale"
@@ -342,14 +309,12 @@ onBeforeUnmount(() => {
         :filenames="filenames"
         :copied="copied"
         :ready="ready"
-        :split-left="splitLeft"
-        :overview-width="overviewWidth"
         @open="openFile"
         @copy="copy"
+        @edit="layout = 'split'"
       />
       <div
         class="editor-area"
-        :style="editorAreaStyle"
         @dragover.capture="dragover"
         @drop.capture="dropped"
         @dragleave="event => {
@@ -359,12 +324,12 @@ onBeforeUnmount(() => {
         <DiffEditor
           v-if="initialized"
           ref="editor"
-          :layout="effectiveLayout"
+          :layout="layout"
           :wrap="wrap"
           :collapse="collapse"
           :ignore-whitespace="ignoreWhitespace"
           :theme="theme"
-          :placeholder="t('emptyHint')"
+          :placeholder="editorPlaceholder"
           :original-label="t('original')"
           :modified-label="t('modified')"
           :current="current"
@@ -372,7 +337,6 @@ onBeforeUnmount(() => {
           @diff="diffUpdated"
           @cursor="cursorMoved"
           @jump="jump"
-          @split-layout="splitLayoutUpdated"
           @ready="ready = true"
           @error="notice = 'editorError'"
         />
