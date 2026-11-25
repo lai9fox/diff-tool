@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { editor, IDisposable } from 'monaco-editor/editor/editor.api.js';
-import type { Side, LineChange } from '../lib/diff-stats';
+import { hasCollapsibleRegions, type Side, type LineChange } from '../lib/diff-stats';
 import type { Layout, Theme } from '../lib/preferences';
 import { monacoTheme } from '../lib/monaco-theme';
+
+type DiffEditorWithUnchangedRegions = editor.IStandaloneDiffEditor & {
+  collapseAllUnchangedRegions?: () => void;
+};
+
+const UNCHANGED_REGIONS = { contextLineCount: 3, minimumLineCount: 4, revealLineCount: 20 } as const;
 
 const props = defineProps<{
   layout: Layout; wrap: boolean; collapse: boolean; ignoreWhitespace: boolean;
@@ -29,6 +35,9 @@ let decorations: Record<Side, editor.IEditorDecorationsCollection>;
 const subscriptions: IDisposable[] = [];
 let disposed = false;
 let navigating = false;
+let diffPending = false;
+let shouldCollapseNextDiff = false;
+let hadCollapsibleRegions = false;
 let splitRatio = 0.5;
 let lastGlyphMargin: boolean | null = null;
 let dragStartX = 0;
@@ -49,8 +58,18 @@ function options(): editor.IDiffEditorOptions {
     splitViewDefaultRatio: splitRatio,
     wordWrap: props.wrap ? 'on' : 'off', diffWordWrap: props.wrap ? 'on' : 'off',
     ignoreTrimWhitespace: props.ignoreWhitespace,
-    hideUnchangedRegions: { enabled: props.collapse, contextLineCount: 3, minimumLineCount: 4, revealLineCount: 20 },
+    hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: props.collapse },
   };
+}
+function collapseAllUnchanged() {
+  if (!diffEditor || !props.collapse) return;
+  const widget = diffEditor as DiffEditorWithUnchangedRegions;
+  if (typeof widget.collapseAllUnchangedRegions === 'function') {
+    widget.collapseAllUnchangedRegions();
+  } else {
+    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: false } });
+    diffEditor.updateOptions({ hideUnchangedRegions: { ...UNCHANGED_REGIONS, enabled: true } });
+  }
 }
 function updateLabels() {
   child('a')?.updateOptions({ placeholder: props.placeholder, ariaLabel: props.originalLabel, wordBasedSuggestions: 'off' });
@@ -139,6 +158,7 @@ function resetResize() {
 function setText(side: Side, text: string) {
   const model = models?.[side];
   if (!model) return;
+  if (model.getValue() !== text) shouldCollapseNextDiff = true;
   model.pushStackElement();
   model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
   model.pushStackElement();
@@ -156,10 +176,32 @@ function goTo(index: number) {
   child('b')?.focus();
 }
 defineExpose({ setText, goTo, focus: (side: Side) => child(side)?.focus() });
-watch(() => [props.layout, props.wrap, props.collapse, props.ignoreWhitespace], () => {
-  diffEditor?.updateOptions(options());
-  requestAnimationFrame(emitSplitLayout);
-});
+watch(
+  () => [props.layout, props.wrap, props.collapse, props.ignoreWhitespace] as const,
+  ([, , collapse, ignoreWhitespace], [, , prevCollapse, prevIgnoreWhitespace]) => {
+    if (!diffEditor) return;
+    if (ignoreWhitespace !== prevIgnoreWhitespace) {
+      diffPending = true;
+      shouldCollapseNextDiff = true;
+    }
+    diffEditor.updateOptions(options());
+    if (collapse && !prevCollapse) {
+      collapseAllUnchanged();
+      shouldCollapseNextDiff = diffPending;
+      hadCollapsibleRegions = !diffPending && hasCollapsibleRegions(
+        diffEditor.getLineChanges() ?? [],
+        models.a.getLineCount(),
+        models.b.getLineCount(),
+        UNCHANGED_REGIONS.contextLineCount,
+        UNCHANGED_REGIONS.minimumLineCount,
+      );
+    } else if (!collapse) {
+      shouldCollapseNextDiff = false;
+      hadCollapsibleRegions = false;
+    }
+    requestAnimationFrame(emitSplitLayout);
+  },
+);
 watch(() => [props.placeholder, props.originalLabel, props.modifiedLabel], updateLabels);
 watch(() => props.theme, applyTheme, { flush: 'post' });
 watch(() => props.current, highlight);
@@ -192,7 +234,10 @@ onMounted(async () => {
     models = { a: monaco.editor.createModel('', 'plaintext'), b: monaco.editor.createModel('', 'plaintext') };
     decorations = { a: child('a')!.createDecorationsCollection(), b: child('b')!.createDecorationsCollection() };
     for (const side of ['a', 'b'] as const) {
-      subscriptions.push(models[side].onDidChangeContent(() => emit('change', side, models[side].getValue())));
+      subscriptions.push(models[side].onDidChangeContent(() => {
+        diffPending = true;
+        emit('change', side, models[side].getValue());
+      }));
       subscriptions.push(child(side)!.onDidChangeCursorPosition(e => {
         if (!navigating) emit('cursor', side, e.position.lineNumber);
       }));
@@ -203,7 +248,21 @@ onMounted(async () => {
       child(side)!.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => emit('jump', -1));
     }
     subscriptions.push(diffEditor.onDidUpdateDiff(() => {
-      emit('diff', diffEditor!.getLineChanges() ?? []);
+      diffPending = false;
+      const changes = diffEditor!.getLineChanges() ?? [];
+      const hasCollapsible = hasCollapsibleRegions(
+        changes,
+        models.a.getLineCount(),
+        models.b.getLineCount(),
+        UNCHANGED_REGIONS.contextLineCount,
+        UNCHANGED_REGIONS.minimumLineCount,
+      );
+      if (props.collapse && hasCollapsible && (shouldCollapseNextDiff || !hadCollapsibleRegions)) {
+        collapseAllUnchanged();
+      }
+      shouldCollapseNextDiff = false;
+      hadCollapsibleRegions = props.collapse && hasCollapsible;
+      emit('diff', changes);
       highlight();
     }));
     diffEditor.setModel({ original: models.a, modified: models.b });

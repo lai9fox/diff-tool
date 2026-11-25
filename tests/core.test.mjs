@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lineStats, findChunkIndex } from '../src/lib/diff-stats.ts';
+import { lineStats, findChunkIndex, hasCollapsibleRegions } from '../src/lib/diff-stats.ts';
 import { parsePreferences } from '../src/lib/preferences.ts';
 import { normalizeColor } from '../src/lib/monaco-theme.ts';
 
@@ -58,4 +58,15 @@ test('theme colors expand short hex values, keep alpha hex values, and fall back
   assert.equal(normalizeColor('#2DA44E29'), '#2da44e29');
   assert.equal(normalizeColor('no-color', '#123456'), '#123456');
   assert.equal(normalizeColor(''), '#000000');
+});
+
+test('collapsible region detection matches Monaco edge and middle thresholds', () => {
+  assert.equal(hasCollapsibleRegions([], 50, 50, 3, 4), false);
+  assert.equal(hasCollapsibleRegions([change(1, 1, 1, 1)], 7, 7, 3, 4), false);
+  assert.equal(hasCollapsibleRegions([change(1, 1, 1, 1)], 8, 8, 3, 4), true);
+  assert.equal(hasCollapsibleRegions([change(8, 8, 8, 8)], 8, 8, 3, 4), true);
+  assert.equal(hasCollapsibleRegions([change(1, 1, 1, 1), change(11, 11, 11, 11)], 11, 11, 3, 4), false);
+  assert.equal(hasCollapsibleRegions([change(1, 1, 1, 1), change(12, 12, 12, 12)], 12, 12, 3, 4), true);
+  assert.equal(hasCollapsibleRegions([change(0, 0, 1, 2), change(9, 9, 11, 11)], 9, 11, 3, 4), false);
+  assert.equal(hasCollapsibleRegions([change(1, 2, 0, 0)], 9, 7, 3, 4), true);
 });
